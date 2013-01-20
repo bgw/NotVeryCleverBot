@@ -12,12 +12,13 @@ from requests.exceptions import HTTPError
 import time
 import pickle
 import queue
+import re
 
 r = praw.Reddit(user_agent="NotVeryCleverBot thread response predictor by "
                            "/u/pipeep")
 username = "NotVeryCleverBot"
-footer = "\n\n---\n^I'm ^a ^new ^bot ^in ^testing. ^Let ^me ^know ^how ^I'm " \
-         "^doing."
+footer = "\n\n---\n*^^I'm ^^a ^^new ^^bot ^^in ^^testing. ^^Let ^^me ^^know " \
+         "^^how ^^I'm ^^doing. [^^Original ^^Thread.](%s)*"
 r.login(username)
 try:
     with open("comments.db", "rb") as f:
@@ -27,6 +28,19 @@ except IOError:
     response_db = {}
     already_done = set()
 
+def strip_formatting(comment_body):
+    return re.sub(r"""[._'"?!]""", "", comment_body.lower())
+
+def score_response(comment):
+    """
+    This function can be modified to give a good internal scoring for a
+    response. If negative, we won't post.
+    """
+    original_score, body, permalink = \
+        response_db[strip_formatting(comment.body)]
+    if len(comment.body) < 5: return -1
+    return original_score - 20
+
 def grow_from_top():
     """
     Read from http://reddit.com/top. We won't bother posting here, because it's
@@ -35,7 +49,7 @@ def grow_from_top():
     This should only really be called when we try to build the database for the
     first time.
     """
-    for submission in r.get_top(limit=500):
+    for submission in r.get_top(limit=900):
         q = queue.Queue()
         for c in submission.comments:
             q.put(c)
@@ -51,8 +65,10 @@ def grow_from_top():
             if comment.body in response_db and \
                                    comment.score < response_db[comment.body][0]:
                 continue
-            for r in comment.replies: q.put(r)
-            response_db[comment.body] = comment.score, comment.replies[0].body
+            for rep in comment.replies: q.put(rep)
+            response_db[strip_formatting(comment.body)] = (
+                comment.score, comment.replies[0].body, comment.permalink
+            )
 
 def main_loop():
     print("Fetching more comments")
@@ -65,15 +81,21 @@ def main_loop():
         if c.author.name == username:
             continue
         if c.body in response_db:
-            response = response_db[c.body]
+            response = response_db[strip_formatting(c.body)]
+            print("lookup of score %d" % score_response(c))
+            if score_response(c) < 0:
+                continue
             print("Someone said:\n    %s\nSo I should say:\n    %s" %
                   (c.body, response[1]))
-            c.reply(response[1] + footer)
+            c.reply(response[1] + (footer % response[2]))
 
 try:
     if not response_db:
         print("Building new database from scratch")
         grow_from_top()
+        print("dumping database")
+        with open("comments.db.initial", "wb") as f:
+            pickle.dump((response_db, already_done), f)
     while True:
         start_time = time.time()
         rate_limit_exceeded = False
@@ -87,6 +109,8 @@ try:
         time.sleep(30 - (time.time() - start_time)) # Reddit api limitations
         if rate_limit_exceeded: time.sleep(300)
 except KeyboardInterrupt:
+    pass
+finally:
     print("dumping database")
     with open("comments.db", "wb") as f:
         pickle.dump((response_db, already_done), f)
