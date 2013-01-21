@@ -4,8 +4,9 @@ if __name__ != "__main__":
     raise ImportError("%s is not a library and should not be imported" %
                       __name__)
 
-import sys
-sys.path += ["../lib/praw"]
+import config
+import rewriter
+import database
 
 import praw
 from requests.exceptions import HTTPError, ConnectionError
@@ -13,38 +14,34 @@ import time
 import pickle
 import queue
 import re
+import random
 
-r = praw.Reddit(user_agent="NotVeryCleverBot thread response predictor by "
-                           "/u/pipeep")
-username = "NotVeryCleverBot"
-footer = "\n\n---\n*^^I'm ^^a ^^new ^^bot ^^in ^^testing. ^^Let ^^me ^^know " \
-         "^^how ^^I'm ^^doing. [^^Original ^^Thread.](%s)*"
-ignore_phrases = {"thank you", "wat", "what", "yes", "no", "this", "yo dawg"}
-r.login(username)
-try:
-    with open("comments.db", "rb") as f:
-        response_db, already_done = pickle.load(f)
-        print("loaded %d comments" % len(already_done))
-except IOError:
-    response_db = {}
-    already_done = set()
+r = praw.Reddit(user_agent=config.useragent)
+r.login(config.username)
+db = database.CommentDB()
 
-def strip_formatting(comment_body):
-    return re.sub(r"""[._'"?!()]""", "", comment_body.lower().strip())
-
-def score_response(comment):
+def score_response(comment, response):
     """
     This function can be modified to give a good internal scoring for a
     response. If negative, we won't post.
     """
-    if strip_formatting(comment.body) in ignore_phrases: return -1
-    original_score, body, permalink = \
-        response_db[strip_formatting(comment.body)]
-    if len(comment.body) < 5 or " " not in comment.body: return -1
-    if original_score < 5: return -1
-    return original_score - 20 + len(comment.body)
+    if response.score < 5: return -1
+    return (response.score - 20 + len(comment.body)) * random.gauss(1, .1)
 
-def grow_from_top(subreddit="all", timeperiod="all", limit=900):
+def get_best_response(comment):
+    simple_body = rewriter.simplify_body(comment.body)
+    if simple_body in config.ignore_phrases: return None
+    if len(comment.body) < 5 or " " not in comment.body: return None
+    responses = db.get_comments(r, {
+        "$orderby": "score",
+        "metadata.parent_simple_body": simple_body,
+    })
+    if not responses: return None
+    best_response = max(zip(map(score_response, responses), responses))
+    if best_response[0] < 0: return None
+    return best_response[1]
+
+def grow_from_top(subreddit="all", timeperiod="all", limit=1000):
     """
     Read from http://reddit.com/top. We won't bother posting here, because it's
     pointless. But we can learn a lot from the posters here.
@@ -58,30 +55,25 @@ def grow_from_top(subreddit="all", timeperiod="all", limit=900):
         grow_from_submission(submission)
 
 def grow_from_submission(submission):
-    if submission.id in already_done:
-        return
-    already_done.add(submission.id)
+    # check that we haven't already done this one
+    if db.last_seen(submission) is not None: return
+    db.mark_submission(submission)
+    # Iterate over all the comments
+    comments = []
     q = queue.Queue()
     for c in submission.comments:
         q.put(c)
     while not q.empty():
-        comment = q.get()
-        already_done.add(comment.id)
-        if isinstance(comment, praw.objects.MoreComments):
-            continue
-        if not comment.replies:
-            continue
-        if isinstance(comment.replies[0], praw.objects.MoreComments):
-            continue
-        if comment.body in response_db and \
-                                   comment.score < response_db[comment.body][0]:
-            continue
-        for rep in comment.replies: q.put(rep)
-        response_db[strip_formatting(comment.body)] = (
-            comment.replies[0].score,
-            comment.replies[0].body,
-            comment.permalink
-        )
+        c = q.get()
+        # Figure out if we should skip it
+        if isinstance(c, praw.objects.MoreComments): continue
+        if db.last_seen(c) is not None: continue
+        # process it
+        comments.append(c)
+        if c.replies:
+            for rep in c.replies:
+                q.put(rep)
+    db.insert_comments(*comments)
 
 def main_loop():
     # try to learn every hour
@@ -91,32 +83,30 @@ def main_loop():
         main_loop.last_learned = time.time()
     # Start writing comments
     print("Fetching more comments")
+    comments_to_insert = []
     for c in r.get_all_comments(limit=200):
         # Keep from processing the same thing twice
-        if c.id in already_done:
+        if db.last_seen(c) is not None:
             continue
-        else:
-            already_done.add(c.id)
-        if c.author.name == username:
+        # learn it
+        comments_to_insert.append(c)
+        # Don't reply to yourself
+        if c.author.name == config.username:
             continue
-        if c.body in response_db:
-            response = response_db[strip_formatting(c.body)]
-            print("lookup of score %d" % score_response(c))
-            if score_response(c) < 0:
-                continue
-            print("Someone said:\n    %s\nSo I should say:\n    %s" %
-                  (c.body, response[1]))
-            c.reply(response[1] + (footer % (response[2] + "?context=3")))
+        response = get_best_response(c)
+        if response is None:
+            continue
+        print("Someone said:\n    %s\nSo I should say:\n    %s" %
+              (c.body, response.body))
+        c.reply(rewriter.prepare_for_post(response, c))
+    db.insert_comments(*comments_to_insert, fast=True)
 main_loop.last_learned = 0
 
 try:
-    if not response_db:
-        print("Building new database from scratch")
-        grow_from_top()
+    if not db.comments.count():
+        print("Populating new database from scratch")
+        grow_from_top(timeperiod="all", limit=5000)
         grow_from_top(timeperiod="month")
-        print("dumping database")
-        with open("comments.db.initial", "wb") as f:
-            pickle.dump((response_db, already_done), f)
     while True:
         start_time = time.time()
         rate_limit_exceeded = False
@@ -129,11 +119,7 @@ try:
         except praw.errors.RateLimitExceeded:
             print("Warning: Rate limit exceeded")
             rate_limit_exceeded = True
-        time.sleep(30 - (time.time() - start_time)) # Reddit api limitations
+        time.sleep(max(0, 30 - (time.time() - start_time))) # api limitations
         if rate_limit_exceeded: time.sleep(300)
 except KeyboardInterrupt:
     pass
-finally:
-    print("dumping database")
-    with open("comments.db", "wb") as f:
-        pickle.dump((response_db, already_done), f)

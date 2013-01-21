@@ -1,1 +1,2 @@
-src/comments.db
+*.py[cod]
+__pycache__
