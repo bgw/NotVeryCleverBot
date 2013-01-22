@@ -4,7 +4,7 @@ import time
 import config
 import rewriter
 
-DATABASE_FORMAT = "0.0.1" # change when changes are made, use semver
+DATABASE_FORMAT = "0.0.2" # change when changes are made, use semver
 
 class CommentDB:
     def __init__(self):
@@ -15,7 +15,7 @@ class CommentDB:
         self.submissions = self.database.submissions
         self.metadata = self.database.metadata
         self.comments.ensure_index([("metadata.parent_simple_body", 1),
-                                    ("score", -1)])
+                                    ("metadata.score", -1)])
         self.comments.ensure_index("name", unique=True)
 
     @staticmethod
@@ -34,13 +34,10 @@ class CommentDB:
         return j
 
     def get_comments(self, reddit_session, query, max_results=100):
-        cursor = self.comments.find(query).limit(max_results)
-        if max_results > 0:
-            json_elements = cursor[:min(max_results, cursor.count())]
-        else:
-            json_elements = cursor[:]
-        return [self.__json_to_comment(reddit_session, el) \
-                for el in json_elements]
+        cursor = self.comments.find(query)
+        if max_results > 0: cursor = cursor.limit(max_results)
+        # convert to comment objects
+        return [self.__json_to_comment(reddit_session, el) for el in cursor]
     
     def mark_submission(self, submission):
         """
@@ -76,17 +73,21 @@ class CommentDB:
             r = c.reddit_session
             json = self.__comment_to_json(c)
             if fast or c.is_root:
+                parent_body = None
                 parent_simple_body = None
             else:
                 try:
                     parent = comments_by_name[c.parent_id]
                 except KeyError:
                     parent = r.get_info(thing_id=c.parent_id)
-                parent_simple_body = rewriter.simplify_body(parent.body)
+                parent_body = parent.body
+                parent_simple_body = rewriter.simplify_body(parent_body)
             # We insert all of our database-specific stuff in "metadata", so
             # that we can easily remove it before constructing comment objects
             json["metadata"] = {
                 "parent_simple_body": parent_simple_body,
+                "parent_body": parent_body,
+                "score": c.score, # ups minus downs
                 "insert_time": time.time(),
                 "database_format": DATABASE_FORMAT,
             }

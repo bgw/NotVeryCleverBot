@@ -15,6 +15,8 @@ import pickle
 import queue
 import re
 import random
+import itertools
+import traceback
 
 r = praw.Reddit(user_agent=config.useragent)
 r.login(config.username)
@@ -25,19 +27,23 @@ def score_response(comment, response):
     This function can be modified to give a good internal scoring for a
     response. If negative, we won't post.
     """
+    if response.body.strip() == "[deleted]": return -1
+    simple_body = rewriter.simplify_body(comment.body)
     if response.score < 5: return -1
-    return (response.score - 20 + len(comment.body)) * random.gauss(1, .1)
+    return (response.score - 40 + len(simple_body)) * random.gauss(1, .1)
 
 def get_best_response(comment):
     simple_body = rewriter.simplify_body(comment.body)
     if simple_body in config.ignore_phrases: return None
-    if len(comment.body) < 5 or " " not in comment.body: return None
+    if len(simple_body) < 10 or simple_body.count(" ") < 2: return None
     responses = db.get_comments(r, {
-        "$orderby": "score",
-        "metadata.parent_simple_body": simple_body,
+        "$query": {"metadata.parent_simple_body": simple_body},
+        "$orderby": {"metadata.score": -1},
     })
     if not responses: return None
-    best_response = max(zip(map(score_response, responses), responses))
+    best_response = max(zip(map(
+        score_response, itertools.repeat(comment), responses), responses),
+        key=lambda v:v[0])
     if best_response[0] < 0: return None
     return best_response[1]
 
@@ -52,7 +58,13 @@ def grow_from_top(subreddit="all", timeperiod="all", limit=1000):
     submission_list = getattr(r.get_subreddit(subreddit),
                               "get_top_from_%s" % timeperiod)(limit=limit)
     for submission in submission_list:
-        grow_from_submission(submission)
+        keep_running = True
+        while keep_running:
+            try:
+                grow_from_submission(submission)
+                keep_running = False
+            except HTTPError:
+                traceback.print_exc()
 
 def grow_from_submission(submission):
     # check that we haven't already done this one
@@ -98,7 +110,10 @@ def main_loop():
             continue
         print("Someone said:\n    %s\nSo I should say:\n    %s" %
               (c.body, response.body))
-        c.reply(rewriter.prepare_for_post(response, c))
+        try:
+            c.reply(rewriter.prepare_for_post(response, c))
+        except:
+            traceback.print_exc()
     db.insert_comments(*comments_to_insert, fast=True)
 main_loop.last_learned = 0
 
@@ -106,7 +121,7 @@ try:
     if not db.comments.count():
         print("Populating new database from scratch")
         grow_from_top(timeperiod="all", limit=5000)
-        grow_from_top(timeperiod="month")
+        grow_from_top(timeperiod="month", limit=1000)
     while True:
         start_time = time.time()
         rate_limit_exceeded = False
