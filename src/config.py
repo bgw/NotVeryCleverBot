@@ -11,7 +11,8 @@ footer = "\n\n---\n*^^I'm ^^a ^^thread ^^response ^^predicting ^^bot ^^in " \
          "[^^source ^^code](https://github.com/PiPeep/NotVeryCleverBot)*"
 # Don't respond when someone says one of these phrases
 ignore_phrases = {"thank you", "wat", "what", "yes", "no", "this", "yo dawg",
-                  "source", "original"}
+                  "source", "original", "pics didnt happen",
+                  "where this from"}
 # These words are useless... remove them
 strip_words = {"the", "and", "you", "it", "is", "isnt", "like", "of", "i", "a",
                "has", "will", "in", "thats", "what", "so", "at", "for", "do",

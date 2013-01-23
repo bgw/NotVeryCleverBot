@@ -29,13 +29,13 @@ def score_response(comment, response):
     """
     if response.body.strip() == "[deleted]": return -1
     simple_body = rewriter.simplify_body(comment.body)
-    if response.score < 5: return -1
-    return (response.score - 40 + len(simple_body)) * random.gauss(1, .1)
+    if response.score < 10: return -1
+    return (response.score - 40 + len(simple_body)) * random.gauss(1, .2)
 
 def get_best_response(comment):
     simple_body = rewriter.simplify_body(comment.body)
     if simple_body in config.ignore_phrases: return None
-    if len(simple_body) < 10 or simple_body.count(" ") < 2: return None
+    if len(simple_body) < 10 or simple_body.count(" ") < 3: return None
     responses = db.get_comments(r, {
         "$query": {"metadata.parent_simple_body": simple_body},
         "$orderby": {"metadata.score": -1},
@@ -120,7 +120,7 @@ main_loop.last_learned = 0
 try:
     if not db.comments.count():
         print("Populating new database from scratch")
-        grow_from_top(timeperiod="all", limit=5000)
+        grow_from_top(timeperiod="all", limit=10000)
         grow_from_top(timeperiod="month", limit=1000)
     while True:
         start_time = time.time()
