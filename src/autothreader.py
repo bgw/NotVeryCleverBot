@@ -7,6 +7,7 @@ if __name__ != "__main__":
 import config
 import rewriter
 import database
+import scoring
 
 import praw
 from requests.exceptions import HTTPError, ConnectionError
@@ -14,8 +15,6 @@ import time
 import pickle
 import queue
 import re
-import random
-import itertools
 import traceback
 import logging
 
@@ -24,31 +23,7 @@ logger = logging.getLogger("autothreader")
 r = praw.Reddit(user_agent=config.useragent)
 r.login(config.username)
 db = database.CommentDB()
-
-def score_response(comment, response):
-    """
-    This function can be modified to give a good internal scoring for a
-    response. If negative, we won't post.
-    """
-    if response.body.strip() == "[deleted]": return -1
-    simple_body = rewriter.simplify_body(comment.body)
-    if response.score < 10: return -1
-    return (response.score - 40 + len(simple_body)) * random.gauss(1, .2)
-
-def get_best_response(comment):
-    simple_body = rewriter.simplify_body(comment.body)
-    if simple_body in config.ignore_phrases: return None
-    if len(simple_body) < 10 or simple_body.count(" ") < 3: return None
-    responses = db.get_comments(r, {
-        "$query": {"metadata.parent_simple_body": simple_body},
-        "$orderby": {"metadata.score": -1},
-    })
-    if not responses: return None
-    best_response = max(zip(map(
-        score_response, itertools.repeat(comment), responses), responses),
-        key=lambda v:v[0])
-    if best_response[0] < 0: return None
-    return best_response[1]
+scorer = scoring.Scorer(r, db)
 
 def grow_from_top(subreddit="all", timeperiod="all", limit=1000):
     """
@@ -108,7 +83,7 @@ def main_loop():
         # Don't reply to yourself
         if c.author.name == config.username:
             continue
-        response = get_best_response(c)
+        response = scorer.get_best_response(c)
         if response is None:
             continue
         logger.info("Responding to a user")
