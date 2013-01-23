@@ -115,7 +115,7 @@ def main_loop():
         try:
             c.reply(rewriter.prepare_for_post(response, c))
         except:
-            logger.exception()
+            logger.exception("Error responding to user")
     db.insert_comments(*comments_to_insert, fast=True)
 main_loop.last_learned = 0
 
