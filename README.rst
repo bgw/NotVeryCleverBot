@@ -8,5 +8,5 @@ same thing. It's just like ``Trapped_in_Reddit``, but with comments!
 
 You can see it in action `here <http://www.reddit.com/user/NotVeryCleverBot/>`_.
 
-The code quality is very poor, but in my defence, this was hacked together late
+The code quality is very poor, but in my defense, this was hacked together late
 at night, only as a proof-of-concept.
