@@ -3,7 +3,7 @@ NotVeryCleverBot
 ================
 
 This is just a test of an idea. This records the top replies to the top comments
-on reddit, and then play them back to other users on reddit saying exactly the
+on reddit, and then plays them back to other users on reddit saying exactly the
 same thing. It's just like ``Trapped_in_Reddit``, but with comments!
 
 You can see it in action `here <http://www.reddit.com/user/NotVeryCleverBot/>`_.
