@@ -17,6 +17,9 @@ import re
 import random
 import itertools
 import traceback
+import logging
+
+logger = logging.getLogger("autothreader")
 
 r = praw.Reddit(user_agent=config.useragent)
 r.login(config.username)
@@ -64,7 +67,7 @@ def grow_from_top(subreddit="all", timeperiod="all", limit=1000):
                 grow_from_submission(submission)
                 keep_running = False
             except HTTPError:
-                traceback.print_exc()
+                logger.exception("Growing from submission failed")
 
 def grow_from_submission(submission):
     # check that we haven't already done this one
@@ -90,11 +93,11 @@ def grow_from_submission(submission):
 def main_loop():
     # try to learn every hour
     if time.time() - main_loop.last_learned > 60*60:
-        print("Learning from today's top posts")
+        logger.info("Learning from today's top posts")
         grow_from_top(timeperiod="day", limit=50)
         main_loop.last_learned = time.time()
     # Start writing comments
-    print("Fetching more comments")
+    logger.debug("Finding comments to reply to")
     comments_to_insert = []
     for c in r.get_all_comments(limit=200):
         # Keep from processing the same thing twice
@@ -108,18 +111,17 @@ def main_loop():
         response = get_best_response(c)
         if response is None:
             continue
-        print("Someone said:\n    %s\nSo I should say:\n    %s" %
-              (c.body, response.body))
+        logger.info("Responding to a user")
         try:
             c.reply(rewriter.prepare_for_post(response, c))
         except:
-            traceback.print_exc()
+            logger.exception()
     db.insert_comments(*comments_to_insert, fast=True)
 main_loop.last_learned = 0
 
 try:
     if not db.comments.count():
-        print("Populating new database from scratch")
+        logger.info("Populating new database from scratch")
         grow_from_top(timeperiod="all", limit=10000)
         grow_from_top(timeperiod="month", limit=1000)
     while True:
@@ -132,7 +134,7 @@ try:
         except ConnectionError:
             pass
         except praw.errors.RateLimitExceeded:
-            print("Warning: Rate limit exceeded")
+            logger.warning("Warning: Rate limit exceeded")
             rate_limit_exceeded = True
         time.sleep(max(0, 30 - (time.time() - start_time))) # api limitations
         if rate_limit_exceeded: time.sleep(300)
