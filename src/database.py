@@ -1,22 +1,86 @@
-import pymongo
-import praw
-import time
 import config
 import rewriter
 
-DATABASE_FORMAT = "0.0.2" # change when changes are made, use semver
+import pymongo
+import bson
+import praw
+import time
+import logging
+
+logger = logging.getLogger("database")
+
+DATABASE_FORMAT = "0.0.4" # change when changes are made, use semver
 
 class CommentDB:
     def __init__(self):
         self.connection = pymongo.MongoClient(config.mongo_server_address,
                                               config.mongo_server_port)
         self.database = self.connection[config.mongo_db_name]
+        # The main collection. Every comment we've ever seen on reddit. Format
+        # matches the API's JSON format.
         self.comments = self.database.comments
+        # Submissions we've already seen. Only enough information is stored so
+        # that we can know not to scan it again.
         self.submissions = self.database.submissions
-        self.metadata = self.database.metadata
-        self.comments.ensure_index([("metadata.parent_simple_body", 1),
-                                    ("metadata.score", -1)])
+        # A smaller database with only high scoring comments (uses DBRef)
+        self.good_comments = self.database.good_comments
+        # Store information about the database itself (database version, last
+        # update, etc)
+        self.metadata_collection = self.database.metadata
+        if self.metadata is None:
+            self.metadata = {
+                "database_format": DATABASE_FORMAT,
+                "last_update": time.time(),
+            }
+        self.ensure_indexes()
+    
+    def ensure_indexes(self):
+        """
+        Build indexes. We can then search by any of these named keys quickly.
+        (Usually O(1) time)
+        """
+        self.good_comments.ensure_index([("metadata.parent_simple_body", 1),
+                                         ("metadata.score", -1)])
         self.comments.ensure_index("name", unique=True)
+        self.submissions.ensure_index("name", unique=True)
+
+    def get_metadata(self, describing="database"):
+        return self.metadata_collection.find_one({"describing": describing})
+
+    def set_metadata(self, document, describing="database"):
+        del document["_id"] # update on _id not allowed
+        self.metadata_collection.update({"describing": describing},
+                                        {"$set": document}, upsert=True)
+
+    metadata = property(get_metadata, set_metadata)
+
+    def auto_update(self):
+        if self.metadata["database_format"] != DATABASE_FORMAT:
+            logger.warning("Database format out-of-date. (%s -> %s)" %
+                (self.metadata["database_format"], DATABASE_FORMAT))
+            self.update()
+
+    def update(self):
+        """
+        Try to update the database format to the latest version.
+        """
+        logger.warning("Updating database. This will probably take a while. "
+                       "(%s -> %s)" %
+                       (self.metadata["database_format"], DATABASE_FORMAT))
+        # Rebuild supplimental collection data
+        self.rebuild_comments_metadata()
+        self.rebuild_good_comments()
+        # update the full database metadata
+        dbmd = self.metadata
+        dbmd["database_format"] = DATABASE_FORMAT
+        dbmd["last_update"] = time.time()
+        self.metadata = dbmd
+        self.compact_all()
+
+    def compact_all(self):
+        logger.info("Compacting all database collections")
+        collections = "comments", "submissions", "good_comments", "metadata"
+        for c in collections: self.database.command("compact", c)
 
     @staticmethod
     def __json_to_comment(reddit_session, json):
@@ -33,11 +97,18 @@ class CommentDB:
                 if not isinstance(c, praw.objects.MoreComments)]
         return j
 
-    def get_comments(self, reddit_session, query, max_results=100):
-        cursor = self.comments.find(query)
+    def get_comments(self, reddit_session, query, good_only=False,
+                     max_results=100):
+        if good_only:
+            cursor = self.good_comments.find(query)
+        else:
+            cursor = self.comments.find(query)
         if max_results > 0: cursor = cursor.limit(max_results)
+        # define a helper
+        g = lambda doc: self.database.dereference(doc["base_ref"]) if good_only\
+                        else doc
         # convert to comment objects
-        return [self.__json_to_comment(reddit_session, el) for el in cursor]
+        return [self.__json_to_comment(reddit_session, g(el)) for el in cursor]
     
     def mark_submission(self, submission):
         """
@@ -65,39 +136,94 @@ class CommentDB:
         if document is None: return None
         return document["metadata"]["insert_time"]
 
-    def insert_comments(self, *comments, fast=False):
+    def insert_comments(self, *comments, fast=True):
         if not comments: return
-        comments_by_name = {c.name:c for c in comments}
+        comments_by_id = {c.name: c for c in comments}
         documents = []
         for c in comments:
             r = c.reddit_session
             json = self.__comment_to_json(c)
-            if fast or c.is_root:
-                parent_body = None
-                parent_simple_body = None
-            else:
-                try:
-                    parent = comments_by_name[c.parent_id]
-                except KeyError:
-                    parent = r.get_info(thing_id=c.parent_id)
-                parent_body = parent.body
-                parent_simple_body = rewriter.simplify_body(parent_body)
-            # We insert all of our database-specific stuff in "metadata", so
-            # that we can easily remove it before constructing comment objects
-            json["metadata"] = {
-                "parent_simple_body": parent_simple_body,
-                "parent_body": parent_body,
-                "score": c.score, # ups minus downs
-                "insert_time": time.time(),
-                "database_format": DATABASE_FORMAT,
-            }
+            json["metadata"] = self.generate_comment_metadata(
+                json, comments_by_id, None if fast else c.reddit_session)
             documents.append(json)
         self.comments.insert(documents)
+
+    def generate_comment_metadata(self, comment_json, comments_by_id={},
+                                  reddit_session=None):
+        parent_body = parent_simple_body = None
+        # find the parent body
+        # Comments are of type t1, submissions are t3
+        if comment_json["parent_id"][:2] != "t3":
+            # lookup in local table
+            parent_id = comment_json["parent_id"]
+            try:
+                parent = comments_by_id[parent_id]
+                if isinstance(parent, praw.objects.Comment):
+                    parent = parent.json_dict
+            except KeyError:
+                # lookup in database
+                parent = self.comments.find_one({"name": parent_id},
+                                                {"body": True})
+                if parent is None and reddit_session is not None:
+                    # fall back to looking it up with the API
+                    parent = r.get_info(thing_id=comment.parent_id).json_dict
+            # Pull out what we want for later
+            if parent is not None:
+                parent_body = parent["body"]
+                parent_simple_body = rewriter.simplify_body(parent_body)
+        # We shouldn't overwrite insert time if we can avoid it
+        try: insert_time = comment_json["metadata"]["insert_time"]
+        except KeyError: insert_time = time.time()
+        # Put it all together
+        return {
+            "parent_simple_body": parent_simple_body,
+            "parent_body": parent_body,
+            "score": comment_json["ups"] - comment_json["downs"],
+            "insert_time": insert_time,
+            "database_format": DATABASE_FORMAT,
+        }
+
+    def rebuild_comments_metadata(self, query={}):
+        """
+        Used when upgrading the database, or dealing with a changed
+        configuration. This is very slow.
+        """
+        logger.info("Rebuilding comment metadata")
+        for document in self.comments.find(query):
+            comment_metadata = self.generate_comment_metadata(document)
+            self.comments.update({"_id": document["_id"]},
+                                 {"$set": {"metadata": comment_metadata}},
+                                 upsert=True)
+    
+    def rebuild_good_comments(self):
+        """
+        This assumes the comments metadata is sane
+        """
+        logger.info("Rebuilding 'good comments' collection")
+        self.good_comments.drop()
+        cursor = self.comments.find(
+            {"$and": [
+                {"metadata.score": {"$gte": config.good_comment_threshold}},
+                {"metadata.parent_simple_body": {"$ne": None}},
+                {"metadata.parent_simple_body": {"$ne": ""}},
+            ]},
+            {"metadata.score": True, "metadata.parent_simple_body": True})
+        for document in cursor:
+            self.good_comments.insert({
+                "base_ref":
+                    bson.dbref.DBRef(collection="comments", id=document["_id"]),
+                "metadata": {
+                    "score": document["metadata"]["score"],
+                    "parent_simple_body":
+                        document["metadata"]["parent_simple_body"],
+                },
+            })
 
     def drop(self):
         """
         !!!WARNING!!!
         """
+        logger.warning("Dropping *entire* MongoDB database!")
         self.connection.drop_database(config.mongo_db_name)
 
 # Monkey patch RedditContentObject so that we can extract the json without extra

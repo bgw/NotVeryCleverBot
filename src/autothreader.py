@@ -89,12 +89,17 @@ def main_loop():
         logger.info("Responding to a user")
         try:
             c.reply(rewriter.prepare_for_post(response, c))
-        except:
-            logger.exception("Error responding to user")
+        except HTTPError as err:
+            if err.response.status_code == 403:
+                logger.warning("HTTP 403. This probably means you were banned "
+                               "from a subreddit.")
+            else:
+                logger.exception("Error responding to user")
     db.insert_comments(*comments_to_insert, fast=True)
 main_loop.last_learned = 0
 
 try:
+    db.auto_update()
     if not db.comments.count():
         logger.info("Populating new database from scratch")
         grow_from_top(timeperiod="all", limit=10000)

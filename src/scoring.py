@@ -16,17 +16,17 @@ class Scorer:
         """
         if response.body.strip() == "[deleted]": return -1
         simple_body = rewriter.simplify_body(comment.body)
-        if response.score < 10: return -1
+        if response.score < config.good_comment_threshold: return -1
         return (response.score - 40 + len(simple_body)) * random.gauss(1, .2)
 
     def get_best_response(self, comment):
         simple_body = rewriter.simplify_body(comment.body)
         if simple_body in config.ignore_phrases: return None
-        if len(simple_body) < 10 or simple_body.count(" ") < 3: return None
+        if len(simple_body) < 10 or simple_body.count(" ") < 4: return None
         responses = self.database.get_comments(self.reddit_session, {
             "$query": {"metadata.parent_simple_body": simple_body},
             "$orderby": {"metadata.score": -1},
-        })
+        }, good_only=True)
         if not responses: return None
         best_response = max(
             zip(
