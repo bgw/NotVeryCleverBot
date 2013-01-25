@@ -30,9 +30,9 @@ class Scorer:
         if response_parent is not None:
             similarity = self._get_parent_similarity_ratio(comment,
                                                            response_parent)
-            difference_penalty = math.log10(1000) * (1 - similarity)**10
+            difference_penalty = math.log10(10000) * (1 - similarity)**10
         else:
-            difference_penalty = math.log10(1000)
+            difference_penalty = math.log10(10000)
         # give it some points for length
         length_reward = math.log10(len(simple_body))
         # throw in some randomness for good luck
@@ -40,7 +40,6 @@ class Scorer:
         # put it all together
         final_score = (base_score - difference_penalty + length_reward) * \
                       fuzz_multiplier
-        print(final_score)
         return final_score
     
     def _get_parent_similarity_ratio(self, comment, response):
