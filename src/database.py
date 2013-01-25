@@ -9,7 +9,7 @@ import logging
 
 logger = logging.getLogger("database")
 
-DATABASE_FORMAT = "0.0.4" # change when changes are made, use semver
+DATABASE_FORMAT = "0.0.5" # change when changes are made, use semver
 
 class CommentDB:
     def __init__(self):
@@ -68,14 +68,14 @@ class CommentDB:
                        "(%s -> %s)" %
                        (self.metadata["database_format"], DATABASE_FORMAT))
         # Rebuild supplimental collection data
-        self.rebuild_comments_metadata()
+        #self.rebuild_comments_metadata()
         self.rebuild_good_comments()
         # update the full database metadata
         dbmd = self.metadata
         dbmd["database_format"] = DATABASE_FORMAT
         dbmd["last_update"] = time.time()
         self.metadata = dbmd
-        self.compact_all()
+        #self.compact_all()
 
     def compact_all(self):
         logger.info("Compacting all database collections")
@@ -97,16 +97,17 @@ class CommentDB:
                 if not isinstance(c, praw.objects.MoreComments)]
         return j
 
-    def get_comments(self, reddit_session, query, good_only=False,
-                     max_results=100):
+    def get_comments(self, reddit_session, query,
+                     sort_by=[("metadata.score", -1)], good_only=False,
+                     limit=100):
         if good_only:
-            cursor = self.good_comments.find(query)
+            cursor = self.good_comments.find(query).sort(sort_by)
         else:
-            cursor = self.comments.find(query)
-        if max_results > 0: cursor = cursor.limit(max_results)
+            cursor = self.comments.find(query).sort(sort_by)
+        if limit > 0: cursor = cursor.limit(limit)
         # define a helper
-        g = lambda doc: self.database.dereference(doc["base_ref"]) if good_only\
-                        else doc
+        g = lambda doc: self.comments.find_one({"name":doc["base_ref"]}) \
+                        if good_only else doc
         # convert to comment objects
         return [self.__json_to_comment(reddit_session, g(el)) for el in cursor]
     
@@ -207,11 +208,13 @@ class CommentDB:
                 {"metadata.parent_simple_body": {"$ne": None}},
                 {"metadata.parent_simple_body": {"$ne": ""}},
             ]},
-            {"metadata.score": True, "metadata.parent_simple_body": True})
+            {
+                "metadata.score": True, "metadata.parent_simple_body": True,
+                "name": True
+            })
         for document in cursor:
             self.good_comments.insert({
-                "base_ref":
-                    bson.dbref.DBRef(collection="comments", id=document["_id"]),
+                "base_ref": document["name"],
                 "metadata": {
                     "score": document["metadata"]["score"],
                     "parent_simple_body":
