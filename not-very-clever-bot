@@ -1,0 +1,7 @@
+#!/bin/sh -e
+# Just a wrapper around the script to make sure it can be executed properly from
+# anywhere.
+
+SRC_DIR="$(dirname "$_")/src"
+cd $SRC_DIR && ./main.py
+cd -

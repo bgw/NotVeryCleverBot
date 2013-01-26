@@ -14,3 +14,8 @@ Dependencies
 - Python 3.2+
 - MongoDB (Tested with 2.2.2)
 - `praw <https://github.com/praw-dev/praw/>`_
+
+Running the Bot
+---------------
+
+After configuration, execute the bot with ``./not-very-clever-bot``.
