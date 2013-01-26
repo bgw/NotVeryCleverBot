@@ -26,9 +26,7 @@ def prepare_for_post(old_comment, new_parent):
             thing_id=old_comment.parent_id)
         if old_parent.author:
             old_parent_author = old_parent.author.name
-        else:
-            return body
-        regex = re.compile(r"((?<=[\W_])|^)%s((?=[\W_])|$)" %
-                           re.escape(old_parent_author), re.IGNORECASE)
-        body = regex.sub(new_parent.author.name, body)
+            regex = re.compile(r"((?<=[\W_])|^)%s((?=[\W_])|$)" %
+                               re.escape(old_parent_author), re.IGNORECASE)
+            body = regex.sub(new_parent.author.name, body)
     return body + (config.footer % (old_comment.permalink + "?context=3"))
