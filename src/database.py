@@ -9,7 +9,7 @@ import logging
 
 logger = logging.getLogger("database")
 
-DATABASE_FORMAT = "0.0.5" # change when changes are made, use semver
+DATABASE_FORMAT = "0.0.6" # change when changes are made, use semver
 
 class CommentDB:
     def __init__(self):
@@ -48,7 +48,8 @@ class CommentDB:
         return self.metadata_collection.find_one({"describing": describing})
 
     def set_metadata(self, document, describing="database"):
-        del document["_id"] # update on _id not allowed
+        if "_id" in document:
+            del document["_id"] # update on _id not allowed
         self.metadata_collection.update({"describing": describing},
                                         {"$set": document}, upsert=True)
 
