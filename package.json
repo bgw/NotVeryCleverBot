@@ -1,0 +1,28 @@
+{
+    "name": "not-very-clever-bot",
+    "version": "0.1.0-dev",
+    "author": "Benjamin Woodruff <benjaminwoodruff@ufl.edu>",
+    "description": "A comment-response finding bot for Reddit",
+    "keywords": [
+        "reddit",
+        "coffee-script",
+        "coffeescript",
+        "cli",
+        "bot",
+        "robot",
+        "ai",
+        "api"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/PiPeep/NotVeryCleverBot.git"
+    },
+    "dependencies": {
+        "coffee-script": "1.x",
+        "underscore": "1.x",
+        "restler": "git://github.com/QuePort/restler.git",
+        "limiter": "1.0.x",
+        "js-yaml": "2.0.x"
+    },
+    "license": "GPL3+"
+}
