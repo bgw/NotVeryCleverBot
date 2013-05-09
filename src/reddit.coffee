@@ -5,107 +5,127 @@
 # suggestions](https://github.com/reddit/reddit/wiki/API) are followed.
 
 _ = require "underscore"
-rest = require "restler"
+url = require "url"
+request = require "request"
 limiter = require "limiter"
 baseVersion = require("../package.json")?.version
 
-# Core Reddit Api Wrapper
-# -----------------------
-
-constructor = (@appname, @owner, @version) ->
-    # Make sure headers aren't undefined
-    @defaults.headers ?= {}
+Reddit = (@appname, @owner, @version) ->
+    @baseURL = "http://www.reddit.com/api/"
     # Configure useragent as recommended by Reddit
-    @appname ?= "unknown"
+    @appname ?= "unknown/nodejs"
     @owner ?= "unknown"
     @version ?= baseVersion
     uaString = "#{@appname} by /u/#{@owner}"
     if @version?
         uaString = "#{@appname} v#{@version} by /u/#{@owner}"
-    _.extend @defaults.headers, "User-Agent": uaString
-    # Reddit suggests only polling 30 times/minute (at most)
-    @limiter = new limiter.RateLimiter 30, "minute"
     # Session information (if logged in)
     @modhash = undefined
     @cookie = undefined
-    # Super important header: needed to hack the Gibson
-    _.extend @defaults.headers, "Client": "'; DROP TABLE clienttypes; --"
-    # Javascript doesn't like constructors to return stuff
+    # Reddit suggests only polling 30 times/minute (at most)
+    @limiter = new limiter.RateLimiter 30, "minute"
+    # Build our custom request functions
+    @baseRequest = request.defaults
+        jar: request.jar()
+        json: true
+        headers:
+            "User-Agent": uaString
+            "Client": "'; DROP TABLE clienttypes; --" # Super important
     return undefined
 
-defaults =
-    baseURL: "http://www.reddit.com/api/"
-    parser: rest.parsers.json
+# Throttling
+# ----------
 
-# Wrappers around Reddit's api functions. Refer to
-# <http://www.reddit.com/dev/api> for documentation
-methods =
+for fname in ["get", "patch", "post", "put", "head", "del"]
+    Reddit::[fname] = do (fname) -> () ->
+        args = _.toArray(arguments)
+        @limiter.removeTokens 1, =>
+            @baseRequest[fname].apply @baseRequest, args
 
-    # Returns: `{errors: [...], data: {modhash: string, cookie: string}}`
-    login: (username, password, rem) ->
-        # Transform arguments
-        data =
-            user: username
-            passwd: password
-            rem: !!rem
-            api_type: "json"
-        # Submit data
-        r = @post "login", data: data
-        # Handle newly created session
-        r.on "complete", (data) =>
-            data = data.json
-            if data.errors?.length then return
-            {@modhash, @cookie} = data.data # unpack
-            _.extend @defaults.headers, "Cookie": "reddit_session=#{@cookie}"
+Reddit::request = ->
+    args = _.toArray(arguments)
+    @limiter.removeTokens 1, => @baseRequest.apply @, args
 
-    # Returns:
-    #
-    #     kind: "t2"
-    #     data:
-    #         comment_karma: integer
-    #         created: integer
-    #         created_utc: integer # same as created
-    #         has_mail: boolean
-    #         has_mod_mail: boolean
-    #         has_verified_email: boolean
-    #         id: string
-    #         is_friend: boolean
-    #         is_gold: boolean
-    #         is_mod: boolean
-    #         link_karma: integer
-    #         modhash: string
-    #         name: string
-    #         over_18: boolean
-    me: -> @get "me.json"
+# Non-Static Utilities
+# --------------------
+#
+# These functions provide general sugar for common tasks, but probably aren't
+# useful on their own.
 
-exports.Reddit = Reddit = rest.service constructor, defaults, methods
+Reddit::resolve = (path) ->
+    url.resolve @baseURL, path
 
-# Wrap network functions to throttle according to reddit limits.
-# This is a hackish set of monkey-patches.
-for fname in ["request", "get", "patch", "put", "post", "json", "postJson", "del"]
-    # Store the old function, we'll need to call it inside our new one
-    oldFunction = Reddit::[fname]
-    # Write the new one
-    Reddit::[fname] = do (oldFunction) -> ->
-        # Quickly wrap and unwrap restler's `request` function
-        # <https://github.com/danwrong/restler/blob/2c016e/lib/restler.js#L301>
-        oldRequest = rest.request
-        rest.request = (url, options) ->
-            req = new rest.Request url, options
-            req.on "error", (->)
-            @limiter.removeTokens 1, req.run.bind(req)
-            return req
-        r = oldFunction.apply @, _.toArray(arguments)
-        # Restore `request` function
-        rest.request = oldRequest
-        # Return the `Request` object
-        return r
+# Individual Wrapper Functions
+# ----------------------------
+#
+# These functions simply transform arguments and call the underlying RESTful
+# function. Callbacks are always in `request` form: `(error, response, body)`.
+#
+# Refer to <http://www.reddit.com/dev/api> for documentation.
+
+# Returns: `{errors: [...], data: {modhash: string, cookie: string}}`
+Reddit::login = (username, password, rem, callback) ->
+    # Transform arguments
+    form =
+        user: username
+        passwd: password
+        rem: !!rem
+        api_type: "json"
+    # Store session
+    storeSession = (error, response, body) =>
+        if !error? and !body.errors?.length
+            {@modhash, @cookie} = body.data
+    # Submit data
+    @post @resolve("login"), {form: form},
+          @unwrap("json", @tee(storeSession, callback))
+
+# Returns:
+#
+#     comment_karma: integer
+#     created: integer
+#     created_utc: integer # same as created
+#     has_mail: boolean
+#     has_mod_mail: boolean
+#     has_verified_email: boolean
+#     id: string
+#     is_friend: boolean
+#     is_gold: boolean
+#     is_mod: boolean
+#     link_karma: integer
+#     modhash: string
+#     name: string
+#     over_18: boolean
+Reddit::me = (callback) ->
+    @get @resolve("me.json"), @unwrap("data", callback)
+
+exports.Reddit = Reddit
 
 # Static Utility Functions
 # ------------------------
+#
+# These functions end up in the top-level exports *and* inside of
+# `Reddit.prototype`.
 
-exports.getThingType = getThingType = (thing) ->
+statics = {}
+
+statics.getThingType = (thing) ->
     if thing[0] != "t"
         throw new RangeError "A thing should begin with 't' character"
     types = ["comment", "account", "link", "message", "subreddit"]
-    return types[parseInt(thing[1], 10) - 1]
+    return types[(+thing[1]) - 1]
+
+# In many places, the reddit API will wrap the returned JSON value. This forms a
+# new callback that unwraps it before passing
+statics.unwrap = (key, callback) ->
+    (error, response, body) ->
+        if _.isObject(body) and {}.hasOwnProperty.call(body, key)
+            callback error, response, body[key]
+        else
+            callback error, response, body
+
+# Like unix's `tee` command, splits the result of one callback into multiple
+statics.tee = (callbacks...) ->
+    (args...) -> cb args... for cb in callbacks
+
+_.extend Reddit::, statics
+_.extend exports, statics
