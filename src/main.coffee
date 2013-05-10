@@ -2,6 +2,7 @@
 
 _ = require "underscore"
 require "js-yaml"
+prettyjson = require "prettyjson"
 config = require "../config.yaml"
 version = require("../package.json").version
 reddit = require "./reddit"
@@ -15,3 +16,5 @@ r.login config.username, config.password, false, (error, response, body) ->
     console.log "Logged in as #{config.username}"
     r.me (error, response, data) ->
         console.log "The API says my name is #{data.name}"
+    r.random {}, (error, response, data) ->
+        console.log prettyjson.render(data)

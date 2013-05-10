@@ -22,8 +22,8 @@ Reddit = (@appname, @owner, @version) ->
     # Session information (if logged in)
     @modhash = undefined
     @cookie = undefined
-    # Reddit suggests only polling 30 times/minute (at most)
-    @limiter = new limiter.RateLimiter 30, "minute"
+    # Reddit suggests only polling once every two seconds (at most)
+    @limiter = new limiter.RateLimiter 1, 2000
     # Build our custom request functions
     @baseRequest = request.defaults
         jar: request.jar()
@@ -54,6 +54,23 @@ Reddit::request = ->
 
 Reddit::resolve = (path) ->
     url.resolve @baseURL, path
+
+Reddit::subredditResolve = (subreddit, path) ->
+    @resolve "#{if subreddit? then "/r/#{subreddit}/" else "/"}#{path}.json"
+
+# Supplies a default `subreddit` key to subreddit-specific calls. Also sets a
+# `@subreddit` property in the subclass.
+Reddit::subreddit = (subreddit) ->
+    parent = @
+    SubReddit = ->
+        for fname in ["hot", "new", "random", "top", "controversial"]
+            @[fname] = (options, callback) ->
+                parent[fname] _.defaults(options, subreddit: subreddit),
+                              callback
+        @subreddit = subreddit
+        return undefined
+    SubReddit:: = @
+    return new SubReddit()
 
 # Individual Wrapper Functions
 # ----------------------------
@@ -97,6 +114,25 @@ Reddit::login = (username, password, rem, callback) ->
 #     over_18: boolean
 Reddit::me = (callback) ->
     @get @resolve("me.json"), @unwrap("data", callback)
+
+Reddit::__listing = (base, {subreddit, time, after, before, limit}, callback) ->
+    params =
+        t: time
+        after: after
+        before: before
+        limit: limit ?= 100
+    @get @subredditResolve(subreddit, base), {qs: params}, callback
+
+for fname in ["hot", "new", "top", "controversial", "random"]
+    Reddit::[fname] = _.partial Reddit::__listing, fname
+
+Reddit::comments = (args...) ->
+    @__listing "comments/#{if a = options.article then a else ""}", args...
+
+# TODO: Special casing for `random`.
+#
+# `random` gives two `Listing` objects. The first is a one-element `Listing`
+# with a link. The second is a `Listing` of comment replies to the parent link.
 
 exports.Reddit = Reddit
 
