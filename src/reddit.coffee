@@ -5,10 +5,11 @@
 # suggestions](https://github.com/reddit/reddit/wiki/API) are followed.
 
 _ = require "underscore"
-url = require "url"
+resolve = require("url").resolve
 request = require "request"
 limiter = require "limiter"
 baseVersion = require("../package.json")?.version
+listing = require "./reddit/listing"
 
 Reddit = (@appname, @owner, @version) ->
     @baseURL = "http://www.reddit.com/api/"
@@ -53,7 +54,7 @@ Reddit::request = ->
 # useful on their own.
 
 Reddit::resolve = (path) ->
-    url.resolve @baseURL, path
+    resolve @baseURL, path
 
 Reddit::subredditResolve = (subreddit, path) ->
     @resolve "#{if subreddit? then "/r/#{subreddit}/" else "/"}#{path}.json"
@@ -78,7 +79,9 @@ Reddit::subreddit = (subreddit) ->
 # These functions simply transform arguments and call the underlying RESTful
 # function. Callbacks are always in `request` form: `(error, response, body)`.
 #
-# Refer to <http://www.reddit.com/dev/api> for documentation.
+# -   Refer to <http://www.reddit.com/dev/api> for method documentation.
+# -   Refer to <https://github.com/reddit/reddit/wiki/JSON> for information on
+#     return types
 
 # Returns: `{errors: [...], data: {modhash: string, cookie: string}}`
 Reddit::login = (username, password, rem, callback) ->
@@ -115,24 +118,27 @@ Reddit::login = (username, password, rem, callback) ->
 Reddit::me = (callback) ->
     @get @resolve("me.json"), @unwrap("data", callback)
 
-Reddit::__listing = (base, {subreddit, time, after, before, limit}, callback) ->
-    params =
-        t: time
-        after: after
-        before: before
-        limit: limit ?= 100
-    @get @subredditResolve(subreddit, base), {qs: params}, callback
+Reddit::__listing = (fname, options, initCallback) ->
+    (
+        listing.createListing options, (innerOptions, cb) =>
+            _.defaults(innerOptions, options)
+            url = @subredditResolve(innerOptions.subreddit, fname)
+            @get url, {qs: innerOptions}, (error, response, body) ->
+                cb error, body
+    ).more initCallback
 
-for fname in ["hot", "new", "top", "controversial", "random"]
+for fname in ["hot", "new", "top", "controversial"]
     Reddit::[fname] = _.partial Reddit::__listing, fname
-
-Reddit::comments = (args...) ->
-    @__listing "comments/#{if a = options.article then a else ""}", args...
 
 # TODO: Special casing for `random`.
 #
 # `random` gives two `Listing` objects. The first is a one-element `Listing`
 # with a link. The second is a `Listing` of comment replies to the parent link.
+Reddit::random = ->
+    throw new Error "not yet implemented"
+
+Reddit::comments = (args...) ->
+    @__listing "comments/#{if a = options.article then a else ""}", args...
 
 exports.Reddit = Reddit
 
