@@ -64,7 +64,8 @@ Reddit::subredditResolve = (subreddit, path) ->
 Reddit::subreddit = (subreddit) ->
     parent = @
     SubReddit = ->
-        for fname in ["hot", "new", "random", "top", "controversial"]
+        for fname in ["hot", "new", "random", "top", "controversial",
+                      "comments"]
             @[fname] = (options, callback) ->
                 parent[fname] _.defaults(options, subreddit: subreddit),
                               callback
@@ -122,7 +123,10 @@ Reddit::__listing = (fname, options, initCallback) ->
     (
         listing.createListing options, (innerOptions, cb) =>
             _.defaults(innerOptions, options)
-            url = @subredditResolve(innerOptions.subreddit, fname)
+            if _.isFunction fname
+                url = @resolve fname(innerOptions)
+            else
+                url = @subredditResolve innerOptions.subreddit, fname
             @get url, {qs: innerOptions}, (error, response, body) ->
                 cb error, body
     ).more initCallback
@@ -130,15 +134,20 @@ Reddit::__listing = (fname, options, initCallback) ->
 for fname in ["hot", "new", "top", "controversial"]
     Reddit::[fname] = _.partial Reddit::__listing, fname
 
+Reddit::comments = _.partial Reddit::__listing, ({article, subreddit}) ->
+    if article?
+        return "/comments/#{article}.json"
+    else if subreddit?
+        return "/r/#{subreddit}/comments.json"
+    else
+        return "/comments.json"
+
 # TODO: Special casing for `random`.
 #
 # `random` gives two `Listing` objects. The first is a one-element `Listing`
 # with a link. The second is a `Listing` of comment replies to the parent link.
 Reddit::random = ->
     throw new Error "not yet implemented"
-
-Reddit::comments = (args...) ->
-    @__listing "comments/#{if a = options.article then a else ""}", args...
 
 exports.Reddit = Reddit
 
