@@ -23,10 +23,11 @@
         "request": "2.x",
         "limiter": "1.0.x",
         "js-yaml": "2.0.x",
-        "prettyjson": "0.x.x"
+        "prettyjson": "0.x"
     },
     "devDependencies": {
-        "docco": "0.x"
+        "docco": "0.x",
+        "coffeelint": "0.x"
     },
     "license": "GPL3+"
 }
