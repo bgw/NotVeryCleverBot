@@ -16,7 +16,6 @@ r.login config.username, config.password, false, (error, response, body) ->
     console.log "Logged in as #{config.username}"
     r.me (error, response, data) ->
         console.log "The API says my name is #{data.name}"
-    r.comments {subreddit: "funny", limit: 10000}, (error, listing) ->
+    r.commentStream(subreddit: "funny").eachAsync (error, el) ->
         if error? then return console.error error
-        listing.eachAsync (el) ->
-            console.log prettyjson.render el
+        console.log prettyjson.render el

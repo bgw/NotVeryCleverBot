@@ -6,15 +6,28 @@ _ = require "underscore"
 
 createListing = ({after, limit}, moreCallback) ->
     return (->
-        @moreCallback = moreCallback
         @__after = after
         @limit = limit ?= 100
+        @moreCallback = moreCallback
         @isComplete = false
+        @listingType = "listing"
         return _.extend @, proto
     ).call([])
 
+# Like `createListing`, but for unending lists. This is useful for streams of
+# data, like comments. Because storing all these entries would take an
+# infinitely increasing amount of memory, there are no array elements stored
+# here. The data is only available via `more` or other related functions.
+createStream = ({after}, moreCallback) ->
+    return (->
+        @__after = after
+        @moreCallback = moreCallback
+        return _.extend @, proto
+    ).call
+        listingType: "stream"
+
 proto =
-    # `more (listing, delta) -> ...`
+    # `more (error, listing, delta) -> ...`
     more: (callback) ->
         # Error handling
         if @isComplete then throw new RangeError "Already done with listing"
@@ -26,22 +39,29 @@ proto =
         prevMore = @more
         @more = undefined
         @moreCallback options, (error, nextChunk) =>
-            if error? then return callback error
+            if error?
+                return callback error
+            delta = unwrapListing nextChunk
             # Allow `more` to be called again
             @more = prevMore
             # Register the new elements
-            @unshift (delta = unwrapListing nextChunk)...
             @__after = nextChunk.data.after
-            @isComplete ||= not @__after? || @length >= @limit
+            if @listingType is "listing"
+                @push delta...
+                @isComplete ||= not @__after? || @length >= @limit
             callback undefined, @, delta
 
     # Get elements until we're complete
     eachAsync: (iterator) ->
-        _.each @, iterator
+        if @listingType is "listing" then _.each @, iterator
         f = =>
             if @isComplete then return
             @more (error, l, delta) =>
-                _.each delta, iterator
+                console.log error
+                if error?
+                    iterator error
+                else
+                    _.each delta, _.partial(iterator, undefined)
                 f()
         f()
 
@@ -52,7 +72,9 @@ proto =
 unwrapListing = (source) ->
     if source.kind != "Listing"
         throw new TypeError "Expected 'kind' value to be 'Listing'"
+    a = () -> undefined
     return _.map source.data.children, (el) -> el.data
 
 _.extend exports,
     createListing: createListing
+    createStream: createStream

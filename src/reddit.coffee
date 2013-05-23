@@ -84,7 +84,6 @@ Reddit::subreddit = (subreddit) ->
 # -   Refer to <https://github.com/reddit/reddit/wiki/JSON> for information on
 #     return types
 
-# Returns: `{errors: [...], data: {modhash: string, cookie: string}}`
 Reddit::login = (username, password, rem, callback) ->
     # Transform arguments
     form =
@@ -100,47 +99,35 @@ Reddit::login = (username, password, rem, callback) ->
     @post @resolve("login"), {form: form},
           @unwrap("json", @tee(storeSession, callback))
 
-# Returns:
-#
-#     comment_karma: integer
-#     created: integer
-#     created_utc: integer # same as created
-#     has_mail: boolean
-#     has_mod_mail: boolean
-#     has_verified_email: boolean
-#     id: string
-#     is_friend: boolean
-#     is_gold: boolean
-#     is_mod: boolean
-#     link_karma: integer
-#     modhash: string
-#     name: string
-#     over_18: boolean
 Reddit::me = (callback) ->
     @get @resolve("me.json"), @unwrap("data", callback)
 
-Reddit::__listing = (fname, options, initCallback) ->
-    (
-        listing.createListing options, (innerOptions, cb) =>
-            _.defaults(innerOptions, options)
-            if _.isFunction fname
-                url = @resolve fname(innerOptions)
-            else
-                url = @subredditResolve innerOptions.subreddit, fname
-            @get url, {qs: innerOptions}, (error, response, body) ->
-                cb error, body
-    ).more initCallback
+Reddit::__listing = (fname, options) ->
+    listing.createListing options, (innerOptions, cb) =>
+        _.defaults innerOptions, options
+        if _.isFunction fname
+            url = @resolve fname(innerOptions)
+        else
+            url = @subredditResolve innerOptions.subreddit, fname
+        @get url, {qs: innerOptions}, (error, response, body) ->
+            cb error, body
 
+# Simple "static" listings. These paths are affected only by subreddit.
 for fname in ["hot", "new", "top", "controversial"]
     Reddit::[fname] = _.partial Reddit::__listing, fname
 
-Reddit::comments = _.partial Reddit::__listing, ({article, subreddit}) ->
-    if article?
-        return "/comments/#{article}.json"
-    else if subreddit?
-        return "/r/#{subreddit}/comments.json"
-    else
-        return "/comments.json"
+# Comments have different API paths depending on article or subreddit.
+Reddit::comments = _.partial Reddit::__listing, (args...) ->
+    statics.__getCommentsPath args... # not defined yet in this file, be lazy
+
+# Creates a stream of new comments as they arrive
+Reddit::commentStream = (options) ->
+    listing.createStream options, (innerOptions, cb) =>
+        _.defaults innerOptions, options
+        url = @resolve statics.__getCommentsPath(innerOptions)
+        @get url, {qs: innerOptions}, (error, response, body) ->
+            cb error, body
+
 
 # TODO: Special casing for `random`.
 #
@@ -164,6 +151,14 @@ statics.getThingType = (thing) ->
         throw new RangeError "A thing should begin with 't' character"
     types = ["comment", "account", "link", "message", "subreddit"]
     return types[(+thing[1]) - 1]
+
+statics.__getCommentsPath = ({article, subreddit}) ->
+    if article?
+        return "/comments/#{article}.json"
+    else if subreddit?
+        return "/r/#{subreddit}/comments.json"
+    else
+        return "/comments.json"
 
 # In many places, the reddit API will wrap the returned JSON value. This forms a
 # new callback that unwraps it before passing
