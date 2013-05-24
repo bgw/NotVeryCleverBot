@@ -10,6 +10,7 @@ request = require "request"
 limiter = require "limiter"
 baseVersion = require("../package.json")?.version
 listing = require "./reddit/listing"
+stream = require "./reddit/stream"
 
 Reddit = (@appname, @owner, @version) ->
     @baseURL = "http://www.reddit.com/api/"
@@ -102,7 +103,7 @@ Reddit::login = (username, password, rem, callback) ->
 Reddit::me = (callback) ->
     @get @resolve("me.json"), @unwrap("data", callback)
 
-Reddit::__listing = (fname, options) ->
+Reddit::_listing = (fname, options) ->
     listing.createListing options, (innerOptions, cb) =>
         _.defaults innerOptions, options
         if _.isFunction fname
@@ -114,17 +115,17 @@ Reddit::__listing = (fname, options) ->
 
 # Simple "static" listings. These paths are affected only by subreddit.
 for fname in ["hot", "new", "top", "controversial"]
-    Reddit::[fname] = _.partial Reddit::__listing, fname
+    Reddit::[fname] = _.partial Reddit::_listing, fname
 
 # Comments have different API paths depending on article or subreddit.
-Reddit::comments = _.partial Reddit::__listing, (args...) ->
-    statics.__getCommentsPath args... # not defined yet in this file, be lazy
+Reddit::comments = _.partial Reddit::_listing, (args...) ->
+    statics._getCommentsPath args... # not defined yet in this file, be lazy
 
 # Creates a stream of new comments as they arrive
 Reddit::commentStream = (options) ->
-    listing.createStream options, (innerOptions, cb) =>
+    stream.createStream options, (innerOptions, cb) =>
         _.defaults innerOptions, options
-        url = @resolve statics.__getCommentsPath(innerOptions)
+        url = @resolve statics._getCommentsPath(innerOptions)
         @get url, {qs: innerOptions}, (error, response, body) ->
             cb error, body
 
@@ -152,7 +153,7 @@ statics.getThingType = (thing) ->
     types = ["comment", "account", "link", "message", "subreddit"]
     return types[(+thing[1]) - 1]
 
-statics.__getCommentsPath = ({article, subreddit}) ->
+statics._getCommentsPath = ({article, subreddit}) ->
     if article?
         return "/comments/#{article}.json"
     else if subreddit?

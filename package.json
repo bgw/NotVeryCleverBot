@@ -20,6 +20,7 @@
     "dependencies": {
         "coffee-script": "1.x",
         "underscore": "1.x",
+        "q": "0.x",
         "request": "2.x",
         "limiter": "1.0.x",
         "js-yaml": "2.0.x",

@@ -6,7 +6,7 @@ _ = require "underscore"
 
 createListing = ({after, limit}, moreCallback) ->
     return (->
-        @__after = after
+        @_after = after
         @limit = limit ?= 100
         @moreCallback = moreCallback
         @isComplete = false
@@ -20,7 +20,7 @@ createListing = ({after, limit}, moreCallback) ->
 # here. The data is only available via `more` or other related functions.
 createStream = ({after}, moreCallback) ->
     return (->
-        @__after = after
+        @_after = after
         @moreCallback = moreCallback
         return _.extend @, proto
     ).call
@@ -34,7 +34,7 @@ proto =
         # Options
         options =
             limit: Math.min(@limit - @length, 100)
-            after: @__after
+            after: @_after
         # Prevent multiple calls at the same time
         prevMore = @more
         @more = undefined
@@ -45,18 +45,18 @@ proto =
             # Allow `more` to be called again
             @more = prevMore
             # Register the new elements
-            @__after = nextChunk.data.after
+            @_after = nextChunk.data.after
             if @listingType is "listing"
                 @push delta...
-                @isComplete ||= not @__after? || @length >= @limit
-            callback undefined, @, delta
+                @isComplete ||= not @_after? || @length >= @limit
+            callback undefined, delta
 
     # Get elements until we're complete
-    eachAsync: (iterator) ->
+    each: (iterator) ->
         if @listingType is "listing" then _.each @, iterator
         f = =>
             if @isComplete then return
-            @more (error, l, delta) =>
+            @more (error, delta) =>
                 console.log error
                 if error?
                     iterator error
@@ -65,7 +65,7 @@ proto =
                 f()
         f()
 
-    forEachAsync: (args...) -> @eachAsync args...
+    forEach: (args...) -> @each args...
 
 # Utility function to convert an API `Listing` object to an Array of currently
 # known elements.
@@ -78,3 +78,4 @@ unwrapListing = (source) ->
 _.extend exports,
     createListing: createListing
     createStream: createStream
+    _unwrapListing: unwrapListing
