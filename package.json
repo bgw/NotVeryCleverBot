@@ -24,6 +24,7 @@
         "request": "2.x",
         "limiter": "1.0.x",
         "js-yaml": "2.0.x",
+        "httperrors": "0.2.x",
         "prettyjson": "0.x"
     },
     "devDependencies": {

@@ -7,6 +7,7 @@
 _ = require "underscore"
 resolve = require("url").resolve
 request = require "request"
+httperrors = require "httperrors"
 limiter = require "limiter"
 baseVersion = require("../package.json")?.version
 listing = require "./reddit/listing"
@@ -35,18 +36,34 @@ Reddit = (@appname, @owner, @version) ->
             "Client": "'; DROP TABLE clienttypes; --" # Super important
     return undefined
 
-# Throttling
-# ----------
+# Throttling and Error Handling
+# -----------------------------
+#
+# This provides throttling (to comply with API rules), and turns non-200 HTTP
+# status codes into errors. For some applications it doesn't make sense to
+# perform error handling like this, but for a JSON API it's simpler.
+
+_transformCallback = (emitter) ->
+    rewrite = (oldCallback) -> (error, response, body) ->
+        if response.statusCode != 200
+            error = new httperrors[response.statusCode]()
+        oldCallback error, response, body
+    # Rewrite the listener node-request plants
+    emitter.removeAllListeners "complete"
+    if emitter.callback?
+        emitter.callback = rewrite _.bind(emitter.callback, emitter)
+        emitter.on "complete", _.partial(emitter.callback, null)
 
 for fname in ["get", "patch", "post", "put", "head", "del"]
-    Reddit::[fname] = do (fname) -> () ->
-        args = _.toArray(arguments)
+    Reddit::[fname] = do (fname) -> (args...) ->
         @limiter.removeTokens 1, =>
-            @baseRequest[fname].apply @baseRequest, args
+            _transformCallback @baseRequest[fname](args...)
+        return this
 
-Reddit::request = ->
-    args = _.toArray(arguments)
-    @limiter.removeTokens 1, => @baseRequest.apply @, args
+Reddit::request = (args...) ->
+    @limiter.removeTokens 1, =>
+        _transformCallback @baseRequest(args...)
+    return this
 
 # Non-Static Utilities
 # --------------------
@@ -94,7 +111,7 @@ Reddit::login = (username, password, rem, callback) ->
         api_type: "json"
     # Store session
     storeSession = (error, response, body) =>
-        if !error? and !body.errors?.length
+        unless error? or body.errors?.length
             {@modhash, @cookie} = body.data
     # Submit data
     @post @resolve("login"), {form: form},

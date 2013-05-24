@@ -9,8 +9,9 @@ reddit = require "./reddit"
 
 r = new reddit.Reddit config.botname, config.owner, version
 r.login config.username, config.password, false, (error, response, body) ->
+    if error
+        throw error
     if body.errors?.length
-        console.error error
         console.error body.errors
         return
     console.log "Logged in as #{config.username}"
