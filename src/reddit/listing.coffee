@@ -3,6 +3,7 @@
 # provides some basic functionality to iterate over an API `Listing` object.
 
 _ = require "underscore"
+Q = require "q"
 
 createListing = ({after, limit}, moreCallback) ->
     return (->
@@ -10,21 +11,8 @@ createListing = ({after, limit}, moreCallback) ->
         @limit = limit ?= 100
         @moreCallback = moreCallback
         @isComplete = false
-        @listingType = "listing"
         return _.extend @, proto
     ).call([])
-
-# Like `createListing`, but for unending lists. This is useful for streams of
-# data, like comments. Because storing all these entries would take an
-# infinitely increasing amount of memory, there are no array elements stored
-# here. The data is only available via `more` or other related functions.
-createStream = ({after}, moreCallback) ->
-    return (->
-        @_after = after
-        @moreCallback = moreCallback
-        return _.extend @, proto
-    ).call
-        listingType: "stream"
 
 proto =
     # `more (error, listing, delta) -> ...`
@@ -35,35 +23,33 @@ proto =
         options =
             limit: Math.min(@limit - @length, 100)
             after: @_after
-        # Prevent multiple calls at the same time
-        prevMore = @more
-        @more = undefined
-        @moreCallback options, (error, nextChunk) =>
-            if error?
-                return callback error
+        Q.ninvoke(this, "moreCallback", options)
+        .then((nextChunk) =>
             delta = unwrapListing nextChunk
-            # Allow `more` to be called again
-            @more = prevMore
             # Register the new elements
             @_after = nextChunk.data.after
-            if @listingType is "listing"
-                @push delta...
-                @isComplete ||= not @_after? || @length >= @limit
-            callback undefined, delta
+            @push delta...
+            @isComplete ||= not @_after? || @length >= @limit
+            # Chain the promise
+            return delta
+        )
+        .nodeify(callback)
+        return this
 
     # Get elements until we're complete
     each: (iterator) ->
-        if @listingType is "listing" then _.each @, iterator
+        _.each this, _.partial(iterator, undefined)
         f = =>
             if @isComplete then return
-            @more (error, delta) =>
-                console.log error
-                if error?
-                    iterator error
-                else
-                    _.each delta, _.partial(iterator, undefined)
-                f()
+            Q.ninvoke(this, "more")
+            .fail(iterator)
+            .then((delta) ->
+                _.each delta, _.partial(iterator, undefined)
+                return delta
+            )
+            .done(f)
         f()
+        return this
 
     forEach: (args...) -> @each args...
 
@@ -72,10 +58,8 @@ proto =
 unwrapListing = (source) ->
     if source.kind != "Listing"
         throw new TypeError "Expected 'kind' value to be 'Listing'"
-    a = () -> undefined
-    return _.map source.data.children, (el) -> el.data
+    return _.pluck source.data.children, "data"
 
 _.extend exports,
     createListing: createListing
-    createStream: createStream
     _unwrapListing: unwrapListing

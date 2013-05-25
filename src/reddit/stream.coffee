@@ -39,9 +39,8 @@ class Stream
         f = =>
             Q.ninvoke(this, "more")
             .fail(iterator)
-            .then((delta) =>
+            .then((delta) ->
                 _.each delta, _.partial(iterator, undefined)
-                console.log delta.length
                 return delta
             )
             .done((delta) ->
