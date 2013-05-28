@@ -49,6 +49,7 @@ _transformCallback = (emitter) ->
             error = new httperrors[response.statusCode]()
         oldCallback error, response, body
     # Rewrite the listener node-request plants
+    # TODO: Handle this better somehow (and handle `body.errors`)
     emitter.removeAllListeners "complete"
     if emitter.callback?
         emitter.callback = rewrite _.bind(emitter.callback, emitter)
@@ -104,6 +105,9 @@ Reddit::subreddit = (subreddit) ->
 
 Reddit::login = (username, password, rem, callback) ->
     # Transform arguments
+    if not callback? and _.isFunction rem
+        callback = rem
+        rem = false
     form =
         user: username
         passwd: password
