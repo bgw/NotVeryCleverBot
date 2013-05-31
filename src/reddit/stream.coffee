@@ -1,5 +1,5 @@
 # It can be handy to iterate over all new comments or links as they arrive to
-# reddit. This provides the stream container for `commentStream` (and maybe an
+# Reddit. This provides the stream container for `commentStream` (and maybe an
 # `articleStream` if that ever gets implemented). API should be somewhat
 # compatible with `Listing` objects.
 
@@ -13,7 +13,7 @@ class Stream
     constructor: ({before, streamCacheSize}, @moreCallback) ->
         @_before = before
         @isComplete = false # always false
-        # Sometimes the reddit API might give us something twice. The cache
+        # Sometimes the Reddit API might give us something twice. The cache
         # helps to weed out duplicates. It still might miss a few though.
         @_streamCacheSize = if (s = streamCacheSize)? then s else 1000
         @_streamCache = []
@@ -52,7 +52,7 @@ class Stream
         f()
         return this
 
-    forEach: (args...) -> @each args...
+    forEach: Stream::each
 
 createStream = (args...) ->
     new Stream args...

@@ -8,18 +8,20 @@ prettyjson = require "prettyjson"
 config = require "../config.yaml"
 version = require("../package.json").version
 reddit = require "./reddit"
-database = require "./database"
+db = require "./database"
 
 r = new reddit.Reddit config.botname, config.owner, version
 Q.ninvoke(r, "login", config.username, config.password)
 .spread((response, body) ->
     console.log "Logged in as #{config.username}"
-    counter = 0
 )
-.then(database.init)
-.done(->
-    counter = 0
+.then(db.init)
+.then ->
+    # Process each new comment as it comes in
     r.commentStream({}).each (error, el) ->
-        console.log "--- #{++counter}"
-        console.log prettyjson.render el
-)
+        if error? then console.error error
+        if db.RawComment? then db.RawComment.createFromJson el
+        db.Comment.createFromJson el
+    r.newStream({}).each (error, el) ->
+        if error? then console.error error
+        db.Article.createFromJson el

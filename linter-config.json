@@ -13,7 +13,7 @@
         "level": "error"
     },
     "indentation": {
-        "level": "error",
+        "level": "ignore",
         "value": 4
     },
     "no_implicit_braces": {
