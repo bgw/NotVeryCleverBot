@@ -2,6 +2,7 @@ _ = require "underscore"
 Q = require "q"
 Sequelize = require "sequelize"
 require "js-yaml"
+logger = require "./logger"
 reddit = require "./reddit"
 config = require("../config.yaml").database
 
@@ -14,6 +15,7 @@ config = _.defaults _.clone(config),
         timestamps: false
         charset: "utf8"
         collate: "utf8_general_ci"
+    logging: logger.silly
 sequelize = new Sequelize config.name, config.username, config.password,
                           config
 

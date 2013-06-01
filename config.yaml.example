@@ -11,3 +11,9 @@ database: # http://sequelizejs.com/documentation#usage-options
     saveRawComments: true
     dialect: "sqlite"
     storage: "database.sqlite"
+logging:
+    - type: console
+      level: "verbose"
+    - type: file
+      filename: "nvcb.log"
+      level: "debug"

@@ -9,6 +9,8 @@ resolve = require("url").resolve
 request = require "request"
 httperrors = require "httperrors"
 limiter = require "limiter"
+
+logger = require "./logger"
 baseVersion = require("../package.json")?.version
 listing = require "./reddit/listing"
 stream = require "./reddit/stream"
@@ -100,6 +102,7 @@ _.extend Reddit.prototype, statics
 for fname in ["get", "patch", "post", "put", "head", "del"]
     Reddit::[fname] = do (fname) -> (args...) ->
         @limiter.removeTokens 1, =>
+            logger.verbose "HTTP #{fname.toUpperCase()}: #{args[0]}"
             _transformCallback @baseRequest[fname](args...)
         return this
 

@@ -2,5 +2,6 @@ config.yaml
 node_modules
 doc
 bin
+*.log
 *.sqlite
 *.sqlite-journal
