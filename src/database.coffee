@@ -2,8 +2,10 @@ _ = require "underscore"
 Q = require "q"
 Sequelize = require "sequelize"
 require "js-yaml"
+
 logger = require "./logger"
 reddit = require "./reddit"
+indexer = require "./transform/indexer"
 config = require("../config.yaml").database
 
 VERSION = "0.0.1"
@@ -88,7 +90,7 @@ Comment = sequelize.define "Comment", {
     classMethods:
         createFromJson: (json) ->
             Q.all(
-                Q(Comment.create(
+                Comment.create(
                     name: json.name,
                     parentCommentName:
                         if reddit.getThingType(json.parent_id) is "comment"
@@ -102,36 +104,61 @@ Comment = sequelize.define "Comment", {
                             null
                         else
                             json.ups - json.downs
-                ).then()),
+                ).then(),
                 # Find parents and children for associations
-                Q(Article.find(
+                Article.find(
                     where: {name: json.link_id},
                     attributes: []
-                ).then()),
-                Q(Comment.find(
+                ).then(),
+                Comment.find(
                     where: {name: json.parent_id}
                     attributes: []
-                ).then()),
-                Q(Comment.findAll(
+                ).then(),
+                Comment.findAll(
                     where: {parentCommentName: json.name}
                     attributes: []
-                ).then())
+                ).then()
             )
             .spread((commentDao, articleDao, parentCommentDao, childrenDaos) ->
-                # TODO: associations
-                commentDao.setArticle articleDao
-                commentDao.setParentComment parentCommentDao
-                for ch in childrenDaos
-                    ch.setParentComment commentDao
-                return commentDao
+                # Determine which operations to perform
+                ops = []
+                if articleDao?
+                    ops.push commentDao.setArticle(articleDao).then()
+                if parentCommentDao?
+                    ops.push(
+                        commentDao.setParentComment(parentCommentDao).then()
+                    )
+                for ch in (childrenDaos || [])
+                    ops.push ch.setParentComment(commentDao).then()
+                # Perform them all in parallel
+                Q.all(ops).then(-> commentDao)
             )
 }
 
 # Instead of storing an index of all comments, we only store a select number of
 # comments meeting a certain set of criteria. It doesn't make sense to keep
 # indexes of all the low scoring comments.
-IndexedComment = sequelize.define "IndexedComment",
+IndexedComment = sequelize.define "IndexedComment", {
     body: Sequelize.TEXT
+}, {
+    classMethods:
+        # This _must_ be called after the Comment has been created
+        createFromJson: (json) ->
+            Q.all(
+                IndexedComment.create(
+                    body: indexer.rewrite(json.body)
+                ).then(),
+                Comment.find(
+                    where: {name: json.name}
+                ).then()
+            )
+            .spread((indexedCommentDao, commentDao) ->
+                indexedCommentDao.setComment(commentDao)
+                    .then(-> indexedCommentDao)
+            )
+}
+
+
 
 Article = sequelize.define "Article", {
     name:
@@ -151,19 +178,25 @@ Article = sequelize.define "Article", {
 }, {
     classMethods:
         createFromJson: (json) ->
-            Q(Article.create(
-                name: json.name,
-                title: json.title,
-                subreddit: json.subreddit,
-                body: json.selftext,
-                url: json.url,
-                nsfw: json.over_18
-            ).then())
-            .then((articleDao) ->
-                for c in Comment.findAll(where: {articleName: json.name},
-                                         attributes: [])
-                    c.setArticle articleDao
-                return articleDao
+            Q.all(
+                Article.create(
+                    name: json.name,
+                    title: json.title,
+                    subreddit: json.subreddit,
+                    body: json.selftext,
+                    url: json.url,
+                    nsfw: json.over_18
+                ).then(),
+                Comment.findAll(
+                    where: {articleName: json.name},
+                    attributes: []
+                ).then()
+            )
+            .spread((articleDao, commentDaos) ->
+                Q.all(
+                    c.setArticle(articleDao).then() for c in (commentDaos || [])
+                )
+                .then(-> articleDao)
             )
 }
 
@@ -187,7 +220,7 @@ IndexedComment.hasOne Comment
 # Initialization and Exports
 # --------------------------
 
-models = [Metadata, Article, Comment]
+models = [Metadata, Article, Comment, IndexedComment]
          .concat(if (r = RawComment)? then [r] else [])
 
 init = ->
@@ -208,6 +241,7 @@ _.extend exports,
     Metadata: Metadata
     RawComment: RawComment
     Comment: Comment
+    IndexedComment: IndexedComment
     Article: Article
     models: models
     init: init
