@@ -34,19 +34,19 @@ exports.define = (sequelize) ->
     createFromJson = (json) ->
         {Comment} = require "./comment"
         Q.all([
-            Article.create
+            Q Article.create
                 name: json.name,
                 title: json.title,
                 subreddit: json.subreddit,
                 body: json.selftext,
                 url: json.url,
                 nsfw: json.over_18
-            Comment.findAll
+            Q Comment.findAll
                 where: {articleName: json.name},
                 attributes: []
         ])
         .spread (articleDao, commentDaos) ->
-            Q.all(c.setArticle(articleDao).then() for c in (commentDaos || []))
+            Q.all(Q(c.setArticle articleDao) for c in (commentDaos || []))
             .then(-> articleDao)
 
     # Define Model

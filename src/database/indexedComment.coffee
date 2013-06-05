@@ -21,9 +21,9 @@ exports.define = (sequelize) ->
     createFromJson = (json) ->
         {Comment} = require "./comment"
         Q.all([
-            IndexedComment.findOrCreate
+            Q IndexedComment.findOrCreate
                 body: indexer.rewrite(json.body)
-            Comment.find
+            Q Comment.find
                 where: {name: json.name}
         ])
         .spread (indexedCommentDao, commentDao) ->

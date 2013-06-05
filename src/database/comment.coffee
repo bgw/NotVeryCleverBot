@@ -37,7 +37,19 @@ exports.define = (sequelize) ->
     createFromJson = (json) ->
         {Article} = require "./article"
         Q.all([
-            Comment.create
+            # Find parents and children for associations
+            Q Article.find
+                where: {name: json.link_id},
+                attributes: []
+            Q Comment.find
+                where: {name: json.parent_id}
+                attributes: []
+            Q Comment.findAll
+                where: {parentCommentName: json.name}
+                attributes: []
+        ])
+        .spread (articleDao, parentCommentDao, childrenDaos) ->
+            commentDao = Comment.build
                 name: json.name,
                 parentCommentName:
                     if reddit.getThingType(json.parent_id) is "comment"
@@ -45,26 +57,14 @@ exports.define = (sequelize) ->
                 articleName: json.link_id,
                 body: json.body,
                 score: unless json.score_hidden then json.ups - json.downs
-            # Find parents and children for associations
-            Article.find
-                where: {name: json.link_id},
-                attributes: []
-            Comment.find
-                where: {name: json.parent_id}
-                attributes: []
-            Comment.findAll
-                where: {parentCommentName: json.name}
-                attributes: []
-        ])
-        .spread (commentDao, articleDao, parentCommentDao, childrenDaos) ->
             # Determine which operations to perform
-            ops = []
+            ops = [-> commentDao.save()]
             if articleDao?
-                ops.push commentDao.setArticle articleDao
+                ops.push Q commentDao.setArticle articleDao
             if parentCommentDao?
-                ops.push commentDao.setParentComment parentCommentDao
+                ops.push Q commentDao.setParentComment parentCommentDao
             for ch in (childrenDaos || [])
-                ops.push ch.setParentComment commentDao
+                ops.push Q ch.setParentComment commentDao
             # Perform them all in parallel
             Q.all(ops).then -> commentDao
 
