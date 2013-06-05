@@ -4,6 +4,8 @@ winston = require "winston"
 require "js-yaml"
 config = require("../config.yaml").logging
 
+winston.exitOnError = false
+
 # Transports
 # ----------
 
@@ -24,9 +26,11 @@ for transport in config
     # Apply defaults
     _.defaults opts,
         level: "info"
+        handleExceptions: true
     if type is "console"
         _.defaults opts,
             colorize: true
+            prettyPrint: true
 
     winston.add winston.transports[_s.capitalize type], opts
 

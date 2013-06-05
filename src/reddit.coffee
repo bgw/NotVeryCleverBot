@@ -14,6 +14,7 @@ logger = require "./logger"
 baseVersion = require("../package.json")?.version
 listing = require "./reddit/listing"
 stream = require "./reddit/stream"
+redditError = require "./reddit/error"
 
 # Static Utility Functions
 # ------------------------
@@ -62,6 +63,8 @@ _transformCallback = (emitter) ->
     rewrite = (oldCallback) -> (error, response, body) ->
         if response.statusCode != 200
             error = new httperrors[response.statusCode]()
+        else if body.json?.errors?.length
+            error = redditError body.json.errors[0]
         oldCallback error, response, body
     # Rewrite the listeners already set up by `request`
     # TODO: Handle this better somehow (and handle `body.errors`)

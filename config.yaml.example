@@ -1,6 +1,7 @@
 botname: NotVeryCleverBot
 owner: pipeep
 username: nvcb-testing
+# If no password is provided, you are asked on launch
 password: wouldntyouliketoknow
 database: # http://sequelizejs.com/documentation#usage-options
     # Basic options

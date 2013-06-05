@@ -22,6 +22,7 @@
         "underscore": "1.x",
         "underscore.string": "2.x",
         "q": "0.x",
+        "commander": "1.1.x",
         "winston": "0.7.x",
         "request": "2.x",
         "limiter": "1.0.x",
