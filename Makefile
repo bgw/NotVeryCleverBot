@@ -13,7 +13,7 @@ build: clean
 doc: clean
 	@echo "Generating Docco documentation"
 	@./node_modules/docco/bin/docco $(call rwildcard,src/,*.coffee) -o doc \
-	                                -l linear
+	                                -l parallel
 lint:
 	@echo "Running coffeelint over source files"
 	@./node_modules/coffeelint/bin/coffeelint -f linter-config.json \
