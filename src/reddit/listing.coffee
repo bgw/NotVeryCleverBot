@@ -2,8 +2,8 @@
 # delivered in one part, but rather in chunks. This is an Array wrapper that
 # provides some basic functionality to iterate over an API `Listing` object.
 
-_ = require "underscore"
-Q = require "q"
+_ = require "lodash"
+async = require "async"
 
 createListing = ({after, limit}, moreCallback) ->
     return (->
@@ -23,31 +23,27 @@ proto =
         options =
             limit: Math.min(@limit - @length, 100)
             after: @_after
-        Q.ninvoke(this, "moreCallback", options)
-        .then((nextChunk) =>
-            delta = unwrapListing nextChunk
-            # Register the new elements
-            @_after = nextChunk.data.after
-            @push delta...
-            @isComplete ||= not @_after? || @length >= @limit
-            # Chain the promise
-            return delta
-        )
-        .nodeify(callback)
+        async.waterfall [
+            _.bind @moreCallback, this, options
+            (nextChunk, callback) =>
+                delta = unwrapListing nextChunk
+                # Register the new elements
+                @_after = nextChunk.data.after
+                @push delta...
+                @isComplete ||= not @_after? || @length >= @limit
+                callback null, delta
+        ], callback
         return this
 
     # Get elements until we're complete
     each: (iterator) ->
-        _.each this, _.partial(iterator, undefined)
+        _.each this, _.partial(iterator, null)
         f = =>
             if @isComplete then return
-            Q.ninvoke(this, "more")
-            .fail(iterator)
-            .then((delta) ->
-                _.each delta, _.partial(iterator, undefined)
-                return delta
-            )
-            .done(f)
+            @more (err, delta) ->
+                if err? then iterator err
+                else _.each delta, _.partial iterator, null
+                f()
         f()
         return this
 

@@ -4,7 +4,7 @@
 # Primary goals are related to ensuring [all API rules and
 # suggestions](https://github.com/reddit/reddit/wiki/API) are followed.
 
-_ = require "underscore"
+_ = require "lodash"
 resolve = require("url").resolve
 request = require "request"
 httperrors = require "httperrors"

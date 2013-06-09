@@ -1,5 +1,5 @@
-_ = require "underscore"
-Q = require "q"
+_ = require "lodash"
+async = require "async"
 program = require "commander"
 require "js-yaml"
 
@@ -11,22 +11,23 @@ db = require "./database"
 
 main = (config) ->
     r = new reddit.Reddit config.botname, config.owner, version
-    Q.ninvoke(r, "login", config.username, config.password)
-    .spread((response, body) ->
-        logger.info "Logged in as #{config.username}"
-    )
-    .then(db.init)
-    .done ->
+    async.waterfall [
+        _.bind r.login, r, config.username, config.password
+        (response, body, callback) ->
+            logger.info "Logged in as #{config.username}"
+            callback null
+        (args..., cb) -> db.init cb
+    ], (err) ->
+        if err? then throw err
         # Process each new comment as it comes in
         r.commentStream({}).each (error, el) ->
             if error? then logger.error error
-            if db.RawComment?
-                db.RawComment.createFromJson(el).done()
+            db.RawComment?.createFromJson(el).done()
             db.Comment.createFromJson(el)
                 .then(-> db.IndexedComment.createFromJson(el))
                 .done()
-        r.newStream({}).each (error, el) ->
-            if error? then logger.error error
+        r.newStream({}).each (err, el) ->
+            if err? then logger.error err
             db.Article.createFromJson(el).done()
 
 program

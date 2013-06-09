@@ -1,5 +1,5 @@
-_ = require "underscore"
-Q = require "q"
+_ = require "lodash"
+async = require "async"
 Sequelize = require "sequelize"
 require "js-yaml"
 
@@ -17,8 +17,7 @@ config = _.defaults _.clone(config),
         charset: "utf8"
         collate: "utf8_general_ci"
     logging: logger.silly
-sequelize = new Sequelize config.name, config.username, config.password,
-                          config
+sequelize = new Sequelize config.name, config.username, config.password, config
 
 # Model Definitions
 # -----------------
@@ -51,33 +50,30 @@ IndexedComment.hasMany Comment
 models = [Metadata, Article, Comment, IndexedComment]
          .concat(if (r = RawComment)? then [r] else [])
 
-init = ->
-    Q.all(Q(m.sync().then()) for m in models)
-    .then(->
-        # Indices
-        # -------
+init = (callback) ->
+    async.waterfall [
+        _.partial async.parallel,
+                  (_.bindKey m.sync(), "done" for m in models)
+        (a..., cb) -> Metadata.get "version", cb
+        (oldVersion, callback) ->
+            unless oldVersion?
+                logger.info "No previous database exists, making new one"
+                Metadata.set "version", (oldVersion = VERSION)
 
-    ).then(->
-        Metadata.get "version"
-    )
-    .then((oldVersion) ->
-        if oldVersion?
-            if oldVersion != VERSION
-                throw TypeError "Database v#{oldVersion}, expected v#{VERSION}"
-        else
-            logger.info "No previous database exists, making new one"
-            Metadata.set("version", VERSION)
-
-            # Sequelize doesn't have a good way to at indices. WTF.
-            _queryInterface = sequelize.getQueryInterface()
-            addIndex = _.bind(_queryInterface.addIndex, _queryInterface)
-            addIndex "Metadata", ["key"], indicesType: "UNIQUE"
-            addIndex "Articles", ["name"], indicesType: "UNIQUE"
-            addIndex "Comments", ["name"], indicesType: "UNIQUE"
-            addIndex "Comments", ["parentCommentName"]
-            addIndex "Comments", ["articleName"]
-        return
-    )
+                # Sequelize doesn't have a good way to at indices. WTF.
+                _queryInterface = sequelize.getQueryInterface()
+                addIndex = _.bindKey _queryInterface, "addIndex"
+                addIndex "Metadata", ["key"], indicesType: "UNIQUE"
+                addIndex "Articles", ["name"], indicesType: "UNIQUE"
+                addIndex "Comments", ["name"], indicesType: "UNIQUE"
+                addIndex "Comments", ["parentCommentName"]
+                addIndex "Comments", ["articleName"]
+            else if oldVersion != VERSION
+                callback new TypeError(
+                    "Database v#{oldVersion}, expected v#{VERSION}"
+                )
+            callback null, oldVersion
+    ], callback
 
 _.extend exports,
     Metadata: Metadata

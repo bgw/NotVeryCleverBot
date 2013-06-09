@@ -1,7 +1,7 @@
 # A set of helper functions that are used to normalize a block of text (or part
 # of a block of text)
 
-_ = require "underscore"
+_ = require "lodash"
 _s = require "underscore.string"
 frequentWords = require("norvig-frequencies")[0...5000] # These are uppercase
 

@@ -1,4 +1,4 @@
-_ = require "underscore"
+_ = require "lodash"
 _s = require "underscore.string"
 
 _errorCache = {}

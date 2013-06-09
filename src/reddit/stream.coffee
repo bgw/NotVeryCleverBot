@@ -3,8 +3,8 @@
 # `articleStream` if that ever gets implemented). API should be somewhat
 # compatible with `Listing` objects.
 
-_ = require "underscore"
-Q = require "q"
+_ = require "lodash"
+async = require "async"
 listing = require "./listing"
 
 unwrapListing = listing._unwrapListing
@@ -20,35 +20,32 @@ class Stream
 
     more: (callback) ->
         # Use moreCallback to find the next elements
-        Q.ninvoke(this, "moreCallback", limit: 100, before: @_before)
-        .then((nextChunk) =>
-            @_before = nextChunk.data.before
-            # The timestamps should be placed into reverse-chronological order
-            # as much as possible
-            delta = unwrapListing(nextChunk).reverse()
-            # Remove duplicates
-            delta = _.filter delta, ({name}) => name not in @_streamCache
-            @_streamCache = _.last @_streamCache.concat(_.pluck(delta, "name")),
-                                   @_streamCacheSize
-            return delta
-        )
-        .nodeify(callback) # Respect our callback
+        async.waterfall [
+            _.bind @moreCallback, this, limit: 100, before: @_before
+            (nextChunk, callback) =>
+                @_before = nextChunk.data.before
+                # The timestamps should be placed into reverse-chronological
+                # order as much as possible
+                delta = unwrapListing(nextChunk).reverse()
+                # Remove duplicates
+                inCache = _.partial _.has, _.object(@_streamCache)
+                delta = _.filter delta, ({name}) => inCache name
+                # Place new entries in cache
+                @_streamCache = @_streamCache.concat _.pluck(delta, "name")
+                @_streamCache = _.last @_streamCache, @_streamCacheSize
+                callback null, delta
+        ], callback # Respect our callback
         return this
 
     each: (iterator) ->
         f = =>
-            Q.ninvoke(this, "more")
-            .fail(iterator)
-            .then((delta) ->
-                _.each delta, _.partial(iterator, undefined)
-                return delta
-            )
-            .done((delta) ->
+            @more (err, delta) ->
+                if err? then return iterator err
+                _.each delta, _.partial iterator, null
                 # If you poll too quickly, you'll get a bunch of responses with
                 # only a couple of entries. It's better to wait and reduce the
                 # number of API calls.
                 if delta.length < 90 then _.delay(f, 30000) else f()
-            )
         f()
         return this
 
