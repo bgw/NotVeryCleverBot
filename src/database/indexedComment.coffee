@@ -27,6 +27,7 @@ exports.define = (sequelize) ->
                 where: {name: json.name}
         ])
         .spread (indexedCommentDao, commentDao) ->
+            if not commentDao? then return indexedCommentDao
             indexedCommentDao.addComment(commentDao).then(-> indexedCommentDao)
 
     # Define Model

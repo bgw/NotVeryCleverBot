@@ -6,11 +6,11 @@ require "js-yaml"
 config = require "../config.yaml"
 version = require("../package.json").version
 logger = require "./logger"
-reddit = require "./reddit"
+Reddit = require "./reddit"
 db = require "./database"
 
 main = (config) ->
-    r = new reddit.Reddit config.botname, config.owner, version
+    r = new Reddit config.botname, config.owner, version
     async.waterfall [
         _.bind r.login, r, config.username, config.password
         (response, body, callback) ->
@@ -20,15 +20,15 @@ main = (config) ->
     ], (err) ->
         if err? then throw err
         # Process each new comment as it comes in
-        r.commentStream({}).each (error, el) ->
-            if error? then logger.error error
+        r.commentStream().each (err, el) ->
+            if error? then throw err
             db.RawComment?.createFromJson(el).done()
             db.Comment.createFromJson(el)
                 .then(-> db.IndexedComment.createFromJson(el))
                 .done()
-        r.newStream({}).each (err, el) ->
-            if err? then logger.error err
-            db.Article.createFromJson(el).done()
+        r.newStream().each (err, el) ->
+            if err? then throw err
+            db.Article.createFromJson el
 
 program
     .version(version)

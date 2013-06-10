@@ -6,13 +6,13 @@ _ = require "lodash"
 async = require "async"
 
 createListing = ({after, limit}, moreCallback) ->
-    return (->
+    return ( ->
         @_after = after
         @limit = limit ?= 100
         @moreCallback = moreCallback
         @isComplete = false
         return _.extend @, proto
-    ).call([])
+    ).call []
 
 proto =
     # `more (error, listing, delta) -> ...`
@@ -41,7 +41,7 @@ proto =
         f = =>
             if @isComplete then return
             @more (err, delta) ->
-                if err? then iterator err
+                if err? then return iterator err
                 else _.each delta, _.partial iterator, null
                 f()
         f()

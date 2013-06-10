@@ -179,6 +179,7 @@ Reddit::me = (callback) ->
 
 # Helper functions for listing and stream based APIs
 _listingStream = (isStream, fname, options) ->
+    options ?= {}
     creator = if isStream then stream.createStream else listing.createListing
     creator options, (innerOptions, cb) =>
         _.defaults innerOptions, options
@@ -208,5 +209,6 @@ Reddit::commentStream = _.partial Reddit::_stream, statics._getCommentsPath
 Reddit::random = ->
     throw new Error "not yet implemented"
 
+exports = module.exports = Reddit
 exports.Reddit = Reddit
 _.extend exports, statics

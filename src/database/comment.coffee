@@ -58,7 +58,7 @@ exports.define = (sequelize) ->
                 body: json.body,
                 score: unless json.score_hidden then json.ups - json.downs
             # Determine which operations to perform
-            ops = [-> commentDao.save()]
+            ops = [ -> commentDao.save()]
             if articleDao?
                 ops.push Q commentDao.setArticle articleDao
             if parentCommentDao?

@@ -29,12 +29,12 @@ class Stream
                 delta = unwrapListing(nextChunk).reverse()
                 # Remove duplicates
                 inCache = _.partial _.has, _.object(@_streamCache)
-                delta = _.filter delta, ({name}) => inCache name
+                delta = _.filter delta, ({name}) => not inCache name
                 # Place new entries in cache
                 @_streamCache = @_streamCache.concat _.pluck(delta, "name")
                 @_streamCache = _.last @_streamCache, @_streamCacheSize
                 callback null, delta
-        ], callback # Respect our callback
+        ], callback
         return this
 
     each: (iterator) ->

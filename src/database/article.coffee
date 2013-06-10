@@ -1,4 +1,5 @@
-Q = require "q"
+async = require "async"
+_ = require "lodash"
 Sequelize = require "sequelize"
 
 validators = require "./validators"
@@ -31,23 +32,26 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
-    createFromJson = (json) ->
+    createFromJson = (json, callback) ->
         {Comment} = require "./comment"
-        Q.all([
-            Q Article.create
+        async.parallel [
+            _.bindKey Article.create(
                 name: json.name,
                 title: json.title,
                 subreddit: json.subreddit,
                 body: json.selftext,
                 url: json.url,
                 nsfw: json.over_18
-            Q Comment.findAll
+            ), "done"
+            _.bindKey Comment.findAll(
                 where: {articleName: json.name},
                 attributes: []
-        ])
-        .spread (articleDao, commentDaos) ->
-            Q.all(Q(c.setArticle articleDao) for c in (commentDaos || []))
-            .then(-> articleDao)
+            ), "done"
+        ], (err, articleDao, commentDaos) ->
+            if err? then return callback? err
+            async.each (commentDaos || []),
+                       ((dao, cb) -> dao.setArticle(articleDao).done cb),
+                       ( -> callback? null, articleDao)
 
     # Define Model
     # ------------

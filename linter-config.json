@@ -13,7 +13,7 @@
         "level": "error"
     },
     "indentation": {
-        "level": "ignore",
+        "level": "error",
         "value": 4
     },
     "no_implicit_braces": {
@@ -43,7 +43,7 @@
         "level": "ignore"
     },
     "empty_constructor_needs_parens": {
-        "level": "error"
+        "level": "warn"
     },
     "non_empty_constructor_needs_parens": {
         "level": "ignore"
@@ -64,6 +64,6 @@
         "level": "ignore"
     },
     "arrow_spacing": {
-        "level": "error"
+        "level": "warn"
     }
 }

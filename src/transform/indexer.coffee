@@ -84,7 +84,7 @@ stripUrls = (str) -> str.replace urlRegex, ""
 # the search.
 rewrite = (str) ->
     # Remove urls and save them for later
-    urls = _.chain(getUrls str)
+    urls = _(getUrls str)
         .map(urlNormalize)
         .sortBy(_.identity)
         .uniq(true)
