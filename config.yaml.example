@@ -3,6 +3,9 @@ owner: pipeep
 username: nvcb-testing
 # If no password is provided, you are asked on launch
 password: wouldntyouliketoknow
+nodetime: # totally optional: http://nodetime.com/
+    accountKey: "0123456789abcdef0123456789abcdef01234567"
+    appName: "NotVeryCleverBot"
 database: # http://sequelizejs.com/documentation#usage-options
     # Basic options
     name: "nvcb"
