@@ -2,7 +2,6 @@
 # change the rest of the database format later (likely), we can quickly rebuild.
 # This takes a lot of disk space.
 
-Q = require "q"
 Sequelize = require "sequelize"
 
 validators = "./validators"
@@ -22,10 +21,11 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
-    createFromJson = (json) ->
-        Q RawComment.create
+    createFromJson = (json, callback=( -> )) ->
+        RawComment.create(
             name: json.name
             json: JSON.stringify json
+        ).done callback
 
     # Define Model
     # ------------

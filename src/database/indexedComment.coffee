@@ -2,9 +2,11 @@
 # comments meeting a certain set of criteria. It doesn't make sense to keep
 # indexes of all the low scoring comments.
 
-Q = require "q"
 Sequelize = require "sequelize"
 
+validators = require "./validators"
+associations = require "./associations"
+comment = require "./comment"
 indexer = require "../transform/indexer"
 
 exports.define = (sequelize) ->
@@ -12,23 +14,27 @@ exports.define = (sequelize) ->
     # Columns
     # -------
 
+    name =
+        type: Sequelize.STRING
+        validate: validators.nameComment
+        primaryKey: true
+
     body = Sequelize.TEXT
 
     # Class Methods
     # -------------
 
     # This must be called *after* the `Comment` has been created
-    createFromJson = (json) ->
-        {Comment} = require "./comment"
-        Q.all([
-            Q IndexedComment.findOrCreate
-                body: indexer.rewrite(json.body)
-            Q Comment.find
-                where: {name: json.name}
-        ])
-        .spread (indexedCommentDao, commentDao) ->
-            if not commentDao? then return indexedCommentDao
-            indexedCommentDao.addComment(commentDao).then(-> indexedCommentDao)
+    createFromJson = (json, callback=( -> )) ->
+        IndexedComment.create(
+            name: json.name
+            body: indexer.rewrite json.body
+        ).done callback
+
+    # Instance Methods
+    # ----------------
+
+    getComment = associations.getOne ( -> comment.Comment), -> where: {@name}
 
     # Define Model
     # ------------
@@ -36,3 +42,4 @@ exports.define = (sequelize) ->
     exports.IndexedComment = IndexedComment = sequelize.define "IndexedComment",
         {body},
         classMethods: {createFromJson}
+        instanceMethods: {getComment}

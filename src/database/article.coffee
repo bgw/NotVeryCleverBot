@@ -3,6 +3,8 @@ _ = require "lodash"
 Sequelize = require "sequelize"
 
 validators = require "./validators"
+associations = require "./associations"
+comment = require "./comment"
 
 exports.define = (sequelize) ->
 
@@ -32,26 +34,21 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
-    createFromJson = (json, callback) ->
-        {Comment} = require "./comment"
-        async.parallel [
-            _.bindKey Article.create(
-                name: json.name,
-                title: json.title,
-                subreddit: json.subreddit,
-                body: json.selftext,
-                url: json.url,
-                nsfw: json.over_18
-            ), "done"
-            _.bindKey Comment.findAll(
-                where: {articleName: json.name},
-                attributes: []
-            ), "done"
-        ], (err, articleDao, commentDaos) ->
-            if err? then return callback? err
-            async.each (commentDaos || []),
-                       ((dao, cb) -> dao.setArticle(articleDao).done cb),
-                       ( -> callback? null, articleDao)
+    createFromJson = (json, callback=( -> )) ->
+        Article.create(
+            name: json.name,
+            title: json.title,
+            subreddit: json.subreddit,
+            body: json.selftext,
+            url: json.url,
+            nsfw: json.over_18
+        ).done callback
+
+    # Instance Methods
+    # ----------------
+
+    getComments = associations.getMany ( -> comment.Comment), ->
+        where: {articleName: @name}
 
     # Define Model
     # ------------
@@ -59,3 +56,4 @@ exports.define = (sequelize) ->
     exports.Article = Article = sequelize.define "Article",
         {name, title, subreddit, body, url, nsfw},
         classMethods: {createFromJson}
+        instanceMethods: {getComments}

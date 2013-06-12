@@ -21,7 +21,6 @@
         "coffee-script": "1.x",
         "lodash": "1.x",
         "underscore.string": "2.x",
-        "q": "0.x",
         "async": "0.2.x",
         "commander": "1.1.x",
         "winston": "0.7.x",

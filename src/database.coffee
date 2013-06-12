@@ -32,18 +32,6 @@ Comment = require("./database/comment").define sequelize
 IndexedComment = require("./database/indexedComment").define sequelize
 Article = require("./database/article").define sequelize
 
-# Associations
-# ------------
-
-# To reduce API requests, some of these associations may not always be
-# satisfied. If that's the case, you'll need to make an API call using the
-# supplied `parentCommentName`, `articleName`, etc. property
-
-Article.hasMany Comment
-Comment.belongsTo Article
-Comment.hasOne Comment, as: "ParentComment"
-IndexedComment.hasMany Comment
-
 # Initialization and Exports
 # --------------------------
 

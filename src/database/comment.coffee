@@ -1,8 +1,9 @@
-Q = require "q"
 Sequelize = require "sequelize"
 
 reddit = require "../reddit"
 validators = require "./validators"
+associations = require "./associations"
+article = require "./article"
 
 exports.define = (sequelize) ->
 
@@ -34,39 +35,28 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
-    createFromJson = (json) ->
-        {Article} = require "./article"
-        Q.all([
-            # Find parents and children for associations
-            Q Article.find
-                where: {name: json.link_id},
-                attributes: []
-            Q Comment.find
-                where: {name: json.parent_id}
-                attributes: []
-            Q Comment.findAll
-                where: {parentCommentName: json.name}
-                attributes: []
-        ])
-        .spread (articleDao, parentCommentDao, childrenDaos) ->
-            commentDao = Comment.build
-                name: json.name,
-                parentCommentName:
-                    if reddit.getThingType(json.parent_id) is "comment"
-                        json.parent_id
-                articleName: json.link_id,
-                body: json.body,
-                score: unless json.score_hidden then json.ups - json.downs
-            # Determine which operations to perform
-            ops = [ -> commentDao.save()]
-            if articleDao?
-                ops.push Q commentDao.setArticle articleDao
-            if parentCommentDao?
-                ops.push Q commentDao.setParentComment parentCommentDao
-            for ch in (childrenDaos || [])
-                ops.push Q ch.setParentComment commentDao
-            # Perform them all in parallel
-            Q.all(ops).then -> commentDao
+    createFromJson = (json, callback=( -> )) ->
+        Comment.create(
+            name: json.name,
+            parentCommentName:
+                if reddit.getThingType(json.parent_id) is "comment"
+                    json.parent_id
+            articleName: json.link_id,
+            body: json.body,
+            score: unless json.score_hidden then json.ups - json.downs
+        ).done callback
+
+    # Instance Methods
+    # ----------------
+
+    getParentComment = associations.getOne ( -> Comment), ->
+        where: {name: @parentCommentName}
+
+    getChildren = associations.getMany ( -> Comment), ->
+        where: {parentCommentName: @name}
+
+    getArticle = associations.getOne ( -> article.Article), ->
+        where: {name: @articleName}
 
     # Define Model
     # ------------
@@ -74,3 +64,4 @@ exports.define = (sequelize) ->
     exports.Comment = Comment = sequelize.define "Comment",
         {name, parentCommentName, articleName, body, score},
         classMethods: {createFromJson}
+        instanceMethods: {getParentComment, getChildren, getArticle}

@@ -15,29 +15,23 @@ main = (config) ->
         (nodetime = require("nodetime")).profile(config.nodetime)
     # Initialization
     r = new Reddit config.botname, config.owner, version
-    async.waterfall [
+    async.series [
         # Login
         _.bind r.login, r, config.username, config.password
-        (response, body, callback) ->
+        (cb) ->
             logger.info "Logged in as #{config.username}"
-            callback null
+            cb null
         # Database initialization
-        (args..., cb) -> db.init cb
+        db.init
     ], (err) ->
         if err? then throw err
         # Process each new comment as it comes in
         r.commentStream().each (err, el) ->
             if error? then throw err
             nodetime?.metric "Reddit API", "Comments per Minute", 1, "", "inc"
-            db.RawComment?.createFromJson(el).done()
-            db.Comment.createFromJson(el)
-                .then(-> db.IndexedComment.createFromJson(el))
-                .done()
-        # Record every new article as it comes in
-        r.newStream().each (err, el) ->
-            if err? then throw err
-            nodetime?.metric "Reddit API", "Articles per Minute", 1, "", "inc"
-            db.Article.createFromJson el
+            db.RawComment?.createFromJson el
+            db.Comment.createFromJson el
+            db.IndexedComment.createFromJson el
 
 program
     .version(version)
