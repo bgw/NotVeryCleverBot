@@ -26,7 +26,7 @@ class Stream
                 # The timestamps should be placed into reverse-chronological
                 # order as much as possible
                 delta = unwrapListing(nextChunk).reverse()
-                @_before = _.last(delta).name
+                @_before = _.last(delta)?.name || @_before
                 # Remove duplicates
                 inCache = _.partial _.has, _.object(@_streamCache)
                 delta = _.filter delta, ({name}) => not inCache name

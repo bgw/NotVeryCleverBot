@@ -13,6 +13,8 @@ demarkdown = (str) ->
     str
         # Flatten numbered and bulleted lists
         .replace(/^\s*([0-9]+\.|[*+-])\s*/gm, " ")
+        # Quotes
+        .replace(/['"]/gm, " ")
         # Non-word characters
         .replace(/(\W|_)/gm, " ")
 
@@ -54,6 +56,8 @@ urlNormalize = (url) ->
         .replace(/(http:\/\/imgur\.com\/[a-z0-9]{3,})\.[a-z]{3}/, "$1")
 
 # Regex from http://daringfireball.net/2010/07/improved_regex_for_matching_urls
+# Has been modified to remove parenthesis-matching code, as it leads to horrible
+# asymptotic complexity in a few cases.
 urlRegex = ///
 (                       # Capture 1: entire matched URL
     (?:
@@ -65,12 +69,12 @@ urlRegex = ///
     )
     (?:                       # One or more:
         [^\s()<>]+                  # Run of non-space, non-()<>
-        |                           #   or
-        \(([^\s()<>]+|(\([^\s()<>]+\)))*\)  # balanced parens, up to 2 levels
+        # |                           #   or
+        # \(([^\s()<>]+|(\([^\s()<>]+\)))*\)  # balanced parens, up to 2 levels
     )+
     (?:                       # End with:
-        \(([^\s()<>]+|(\([^\s()<>]+\)))*\)  # balanced parens, up to 2 levels
-        |                               #   or
+        # \(([^\s()<>]+|(\([^\s()<>]+\)))*\)  # balanced parens, up to 2 levels
+        # |                               #   or
         [^\s`!()\[\]{};:'".,<>?«»“”‘’] # not a space or one of these punct chars
     )
 )
