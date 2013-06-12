@@ -35,16 +35,17 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
+    partialFromJson = (json) ->
+        name: json.name,
+        parentCommentName:
+            if reddit.getThingType(json.parent_id) is "comment"
+                json.parent_id
+        articleName: json.link_id,
+        body: json.body,
+        score: unless json.score_hidden then json.ups - json.downs
+
     createFromJson = (json, callback=( -> )) ->
-        Comment.create(
-            name: json.name,
-            parentCommentName:
-                if reddit.getThingType(json.parent_id) is "comment"
-                    json.parent_id
-            articleName: json.link_id,
-            body: json.body,
-            score: unless json.score_hidden then json.ups - json.downs
-        ).done callback
+        Comment.create(@partialFromJson json).done callback
 
     # Instance Methods
     # ----------------
@@ -63,5 +64,5 @@ exports.define = (sequelize) ->
 
     exports.Comment = Comment = sequelize.define "Comment",
         {name, parentCommentName, articleName, body, score},
-        classMethods: {createFromJson}
+        classMethods: {partialFromJson, createFromJson}
         instanceMethods: {getParentComment, getChildren, getArticle}

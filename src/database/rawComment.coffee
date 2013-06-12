@@ -21,15 +21,16 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
+    partialFromJson = (json) ->
+        name: json.name
+        json: JSON.stringify json
+
     createFromJson = (json, callback=( -> )) ->
-        RawComment.create(
-            name: json.name
-            json: JSON.stringify json
-        ).done callback
+        RawComment.create(partialFromJson json).done callback
 
     # Define Model
     # ------------
 
     exports.RawComment = RawComment = sequelize.define "RawComment",
         {name, json},
-        classMethods: {createFromJson}
+        classMethods: {partialFromJson, createFromJson}

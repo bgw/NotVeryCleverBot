@@ -15,7 +15,7 @@ class Stream
         @isComplete = false # always false
         # Sometimes the Reddit API might give us something twice. The cache
         # helps to weed out duplicates. It still might miss a few though.
-        @_streamCacheSize = if (s = streamCacheSize)? then s else 1000
+        @_streamCacheSize = if (s = streamCacheSize)? then s else 5000
         @_streamCache = []
 
     more: (callback) ->
@@ -23,10 +23,10 @@ class Stream
         async.waterfall [
             _.bind @moreCallback, this, limit: 100, before: @_before
             (nextChunk, callback) =>
-                @_before = nextChunk.data.before
                 # The timestamps should be placed into reverse-chronological
                 # order as much as possible
                 delta = unwrapListing(nextChunk).reverse()
+                @_before = _.last(delta).name
                 # Remove duplicates
                 inCache = _.partial _.has, _.object(@_streamCache)
                 delta = _.filter delta, ({name}) => not inCache name

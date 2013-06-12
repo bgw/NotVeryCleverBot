@@ -24,12 +24,12 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
-    # This must be called *after* the `Comment` has been created
+    partialFromJson = (json) ->
+        name: json.name
+        body: indexer.rewrite json.body
+
     createFromJson = (json, callback=( -> )) ->
-        IndexedComment.create(
-            name: json.name
-            body: indexer.rewrite json.body
-        ).done callback
+        IndexedComment.create(partialFromJson json).done callback
 
     # Instance Methods
     # ----------------
@@ -40,6 +40,6 @@ exports.define = (sequelize) ->
     # ------------
 
     exports.IndexedComment = IndexedComment = sequelize.define "IndexedComment",
-        {body},
-        classMethods: {createFromJson}
+        {name, body},
+        classMethods: {partialFromJson, createFromJson}
         instanceMethods: {getComment}

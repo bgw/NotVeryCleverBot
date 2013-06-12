@@ -34,15 +34,16 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
+    partialFromJson = (json) ->
+        name: json.name,
+        title: json.title,
+        subreddit: json.subreddit,
+        body: json.selftext,
+        url: json.url,
+        nsfw: json.over_18
+
     createFromJson = (json, callback=( -> )) ->
-        Article.create(
-            name: json.name,
-            title: json.title,
-            subreddit: json.subreddit,
-            body: json.selftext,
-            url: json.url,
-            nsfw: json.over_18
-        ).done callback
+        Article.create(@partialFromJson json).done callback
 
     # Instance Methods
     # ----------------
@@ -55,5 +56,5 @@ exports.define = (sequelize) ->
 
     exports.Article = Article = sequelize.define "Article",
         {name, title, subreddit, body, url, nsfw},
-        classMethods: {createFromJson}
+        classMethods: {partialFromJson, createFromJson}
         instanceMethods: {getComments}

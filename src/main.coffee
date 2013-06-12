@@ -25,13 +25,25 @@ main = (config) ->
         db.init
     ], (err) ->
         if err? then throw err
+        commentCargo = async.cargo (comments, callback) ->
+            async.parallel [
+                _.bindKey db.RawComment?.bulkCreate(
+                    _.map comments, _.bindKey db.RawComment, "partialFromJson"
+                ), "done"
+                _.bindKey db.Comment.bulkCreate(
+                    _.map comments, _.bindKey db.Comment, "partialFromJson"
+                ), "done"
+                _.bindKey db.IndexedComment.bulkCreate(
+                    _.map comments,
+                          _.bindKey db.IndexedComment, "partialFromJson"
+                ), "done"
+            ], callback
+        commentCargo.payload = 100
         # Process each new comment as it comes in
         r.commentStream().each (err, el) ->
             if error? then throw err
             nodetime?.metric "Reddit API", "Comments per Minute", 1, "", "inc"
-            db.RawComment?.createFromJson el
-            db.Comment.createFromJson el
-            db.IndexedComment.createFromJson el
+            commentCargo.push el
 
 program
     .version(version)
