@@ -1,6 +1,8 @@
 NotVeryCleverBot
 ================
 
+[![Dependency Status](https://gemnasium.com/PiPeep/NotVeryCleverBot.png)](https://gemnasium.com/PiPeep/NotVeryCleverBot)
+
 This is just a test of an idea. This records the top replies to the top comments
 on reddit, and then plays them back to other users on reddit saying exactly the
 same thing. It's just like `Trapped_in_Reddit`, but with comments!
