@@ -5,6 +5,8 @@ _ = require "lodash"
 async = require "async"
 Sequelize = require "sequelize"
 
+dbOps = require "./operations"
+
 exports.define = (sequelize) ->
 
     # Columns
@@ -20,21 +22,14 @@ exports.define = (sequelize) ->
     # Class Methods
     # -------------
 
-    get = (key, callback) ->
+    get = (key, callback=( -> )) ->
         async.waterfall [
             _.bindKey Metadata.find(where: {key}), "done"
             (dao, cb) -> cb null, dao?.value
         ], callback
 
-    set = (key, value, callback) ->
-        async.waterfall [
-            _.bindKey Metadata.find(where: {key}), "done"
-            (entry, cb) ->
-                if entry?
-                    cb null, entry.updateAttributes {value}
-                else
-                    cb null, Metadata.create {key, value}
-        ], callback
+    set = (key, value, callback=( -> )) ->
+        return dbOps(Metadata).replace {key, value}, callback
 
     # Define Model
     # ------------

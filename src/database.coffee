@@ -56,6 +56,7 @@ init = (callback) ->
                 addIndex "Comments", ["name"], indicesType: "UNIQUE"
                 addIndex "Comments", ["parentCommentName"]
                 addIndex "Comments", ["articleName"]
+                addIndex "IndexedComments", ["body"]
             else if oldVersion != VERSION
                 callback new TypeError(
                     "Database v#{oldVersion}, expected v#{VERSION}"
