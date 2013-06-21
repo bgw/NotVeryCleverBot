@@ -22,6 +22,7 @@
         "lodash": "1.x",
         "underscore.string": "2.x",
         "async": "0.2.x",
+        "lazy.js": "0.1.x",
         "commander": "1.1.x",
         "winston": "0.7.x",
         "request": "2.x",

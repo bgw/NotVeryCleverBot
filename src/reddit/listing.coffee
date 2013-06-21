@@ -4,50 +4,53 @@
 
 _ = require "lodash"
 async = require "async"
+Lazy = require "lazy.js"
 
-createListing = ({after, limit}, moreCallback) ->
-    return ( ->
+class Listing extends Lazy.Sequence
+    constructor: ({after}, moreCallback) ->
         @_after = after
-        @limit = limit ?= 100
-        @moreCallback = moreCallback
-        @isComplete = false
-        return _.extend @, proto
-    ).call []
+        @_moreCallback = moreCallback
+        @_isComplete = false
 
-proto =
-    # `more (error, listing, delta) -> ...`
-    more: (callback) ->
+    _more: (callback) ->
         # Error handling
-        if @isComplete then throw new RangeError "Already done with listing"
+        if @_isComplete then callback new RangeError "Already done with listing"
         # Options
-        options =
-            limit: Math.min(@limit - @length, 100)
-            after: @_after
+        options = after: @_after
         async.waterfall [
-            _.bind @moreCallback, this, options
+            _.bind @_moreCallback, this, options
             (nextChunk, callback) =>
                 delta = unwrapListing nextChunk
                 # Register the new elements
                 @_after = nextChunk.data.after
-                @push delta...
-                @isComplete ||= not @_after? || @length >= @limit
+                @_isComplete ||= not @_after?
                 callback null, delta
         ], callback
-        return this
+        return
 
-    # Get elements until we're complete
+    # Calls the given iterator on each element. If an error occurs, it is passed
+    # to the iterator in place of an element (See [dtao/lazy.js#27] [dtao]). You
+    # should check `instanceof Error`.
+    #
+    # [dtao]: https://github.com/dtao/lazy.js/issues/27
     each: (iterator) ->
-        _.each this, _.partial(iterator, null)
         f = =>
-            if @isComplete then return
-            @more (err, delta) ->
-                if err? then return iterator err
-                else _.each delta, _.partial iterator, null
+            if @_isComplete then return
+            @_more (err, delta) ->
+                if err?
+                    unless iterator(err) is false
+                        _.delay f, 30000
+                    return
+                # Iterate over delta, and quit if false is explicitly returned
+                (if iterator(el) is false then return) for el in delta
                 f()
         f()
-        return this
+        return
 
     forEach: (args...) -> @each args...
+
+createListing = (args...) ->
+    new Listing args...
 
 # Utility function to convert an API `Listing` object to an Array of currently
 # known elements.

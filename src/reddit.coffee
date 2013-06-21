@@ -25,7 +25,7 @@ redditError = require "./reddit/error"
 statics = {}
 
 statics.getThingType = (thing) ->
-    if thing[0] != "t"
+    if not thing? or thing[0] != "t"
         throw new RangeError "A thing should begin with 't' character"
     types = ["comment", "account", "link", "message", "subreddit"]
     return types[(+thing[1]) - 1]
@@ -38,11 +38,25 @@ statics._getCommentsPath = ({article, subreddit}) ->
     else
         return "/comments.json"
 
+# Use the `error` field in a more logical way. HTTP status codes and values in
+# `body.json.errors` should all qualify as error values. All high level
+# functions will use this automatically. It's up to you to use this if you call
+# a low-level function like `get` or `post` yourself.
+statics.apiErrors = (oldCallback) ->
+    (error, response, body) ->
+        if not response?
+            error ?= new Error "Could not connect to server"
+        else if response.statusCode != 200
+            error ?= new httperrors[response.statusCode]()
+        else if body.json?.errors?.length
+            error ?= redditError body.json.errors[0]
+        oldCallback error, response, body
+
 # In many places, the Reddit API will wrap the returned JSON value. This forms a
 # new callback that unwraps it before passing
 statics.unwrap = (key, callback) ->
     (error, response, body) ->
-        if _.isObject(body) and {}.hasOwnProperty.call(body, key)
+        if _.isObject(body) and _.has(body, key)
             callback error, response, body[key]
         else
             callback error, response, body
@@ -50,28 +64,6 @@ statics.unwrap = (key, callback) ->
 # Like unix's `tee` command, splits the result of one callback into multiple
 statics.tee = (callbacks...) ->
     (args...) -> cb args... for cb in callbacks
-
-
-# Throttling and Error Handling
-# -----------------------------
-#
-# This provides throttling (to comply with API rules), and turns non-200 HTTP
-# status codes into errors. For some applications it doesn't make sense to
-# perform error handling like this, but for a JSON API it's simpler.
-
-_transformCallback = (emitter) ->
-    rewrite = (oldCallback) -> (error, response, body) ->
-        if response.statusCode != 200
-            error = new httperrors[response.statusCode]()
-        else if body.json?.errors?.length
-            error = redditError body.json.errors[0]
-        oldCallback error, response, body
-    # Rewrite the listeners already set up by `request`
-    # TODO: Handle this better somehow (and handle `body.errors`)
-    emitter.removeAllListeners "complete"
-    if emitter.callback?
-        emitter.callback = rewrite _.bind(emitter.callback, emitter)
-        emitter.on "complete", _.partial(emitter.callback, null)
 
 
 # Reddit Class Definition
@@ -98,6 +90,7 @@ Reddit = (@appname, @owner, @version) ->
         headers:
             "User-Agent": uaString
             "Client": "'; DROP TABLE clienttypes; --" # Super important
+        timeout: 60000 # 60 second timeout
     return undefined
 
 _.extend Reddit.prototype, statics
@@ -106,7 +99,7 @@ for fname in ["get", "patch", "post", "put", "head", "del"]
     Reddit::[fname] = do (fname) -> (args...) ->
         @limiter.removeTokens 1, =>
             logger.verbose "HTTP #{fname.toUpperCase()}: #{args[0]}"
-            _transformCallback @baseRequest[fname](args...)
+            @baseRequest[fname](args...)
         return this
 
 Reddit::request = (args...) ->
@@ -168,14 +161,14 @@ Reddit::login = (username, password, rem, callback) ->
         api_type: "json"
     # Store session
     storeSession = (error, response, body) =>
-        unless error? or body.errors?.length
+        unless error?
             {@modhash, @cookie} = body.data
     # Submit data
     @post @resolve("login"), {form: form},
-          @unwrap("json", @tee(storeSession, callback))
+          @apiErrors(@unwrap("json", @tee(storeSession, callback)))
 
 Reddit::me = (callback) ->
-    @get @resolve("me.json"), @unwrap("data", callback)
+    @get @resolve("me.json"), @apiErrors(@unwrap("data", callback))
 
 # Helper functions for listing and stream based APIs
 _listingStream = (isStream, fname, options) ->
@@ -187,7 +180,7 @@ _listingStream = (isStream, fname, options) ->
             url = @resolve fname(innerOptions)
         else
             url = @subredditResolve innerOptions.subreddit, fname
-        @get url, {qs: innerOptions}, (error, response, body) ->
+        @get url, {qs: innerOptions}, @apiErrors (error, response, body) ->
             cb error, body
 
 Reddit::_listing = _.partial _listingStream, false
