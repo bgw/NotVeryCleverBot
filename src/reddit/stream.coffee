@@ -28,7 +28,7 @@ class Stream extends Lazy.Sequence
             _.bind @moreCallback, this, limit: 100, before: @_before
             (nextChunk, callback) =>
                 # The timestamps should be placed into reverse-chronological
-                # order as much as possible
+                # order as much as possible.
                 delta = unwrapListing(nextChunk).reverse()
                 # Sometimes we're given no entries from the API. This might be
                 # because our `before` value is bad or too old. In that case it
@@ -69,6 +69,4 @@ class Stream extends Lazy.Sequence
 createStream = (args...) ->
     new Stream args...
 
-_.extend exports,
-    Stream: Stream
-    createStream: createStream
+_.extend exports, {Stream, createStream}

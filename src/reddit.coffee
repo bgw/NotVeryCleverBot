@@ -14,6 +14,7 @@ logger = require "./logger"
 baseVersion = require("../package.json")?.version
 listing = require "./reddit/listing"
 stream = require "./reddit/stream"
+analytics = require "./reddit/analytics"
 redditError = require "./reddit/error"
 
 # Static Utility Functions
@@ -103,8 +104,7 @@ for fname in ["get", "patch", "post", "put", "head", "del"]
         return this
 
 Reddit::request = (args...) ->
-    @limiter.removeTokens 1, =>
-        _transformCallback @baseRequest(args...)
+    @limiter.removeTokens 1, => @baseRequest(args...)
     return this
 
 # Non-Static Utilities
@@ -194,6 +194,11 @@ for fname in ["hot", "new", "top", "controversial"]
 # Comments have different API paths depending on article or subreddit.
 Reddit::comments = _.partial Reddit::_listing, statics._getCommentsPath
 Reddit::commentStream = _.partial Reddit::_stream, statics._getCommentsPath
+
+# Use <http://redditanalytics.com> for the comment stream source. The
+# implementation may behave slightly differently, but it can save you a lot of
+# API calls.
+Reddit::commentStreamAnalytics = analytics.createCommentStream
 
 # TODO: Special casing for `random`.
 #

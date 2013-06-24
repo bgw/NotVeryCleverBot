@@ -56,7 +56,7 @@ main = (config) ->
 
     # Process each new comment as it comes in.
     mainLoop = ->
-        r.commentStream().each (el) ->
+        r.commentStreamAnalytics().each (el) ->
             if logErr el then return
             nodetime?.metric "Reddit API", "Comments per Minute", 1, "", "inc"
             commentCargo.push el, logErr
