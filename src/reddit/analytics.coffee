@@ -38,8 +38,9 @@ class CommentStream extends Lazy.Sequence
             # Allow the rest of `@_tempBuffer` to be read
             @httpStream.emit "readable", ""
             unless result?.error
-                # Use a defer to allow other event listeners to propogate
-                _.defer => @_reload()
+                # Use a delay to avoid spamming the server if we're broken and
+                # to allow other event listeners to propogate
+                _.delay ( => @_reload()), 15000
         onError = (error) =>
             logger.warn "Redditanalytics comment stream threw: #{error.message}"
             @_tempBuffer = ""

@@ -31,6 +31,8 @@ exports.define = (sequelize) ->
         type: Sequelize.BOOLEAN
         defaultValue: false
 
+    time = Sequelize.DATE
+
     # Class Methods
     # -------------
 
@@ -41,6 +43,8 @@ exports.define = (sequelize) ->
         body: json.selftext,
         url: json.url,
         nsfw: json.over_18
+        time:
+            _(new Date(0)).tap((d) -> d.setUTCSeconds json.created_utc).value()
 
     createFromJson = (json, callback=( -> )) ->
         Article.create(@partialFromJson json).done callback
@@ -55,6 +59,6 @@ exports.define = (sequelize) ->
     # ------------
 
     exports.Article = Article = sequelize.define "Article",
-        {name, title, subreddit, body, url, nsfw},
+        {name, title, subreddit, body, url, nsfw, time},
         classMethods: {partialFromJson, createFromJson}
         instanceMethods: {getComments}
