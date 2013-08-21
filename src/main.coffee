@@ -1,6 +1,7 @@
 _ = require "lodash"
 async = require "async"
 program = require "commander"
+inquirer = require "inquirer"
 require "js-yaml"
 
 config = require "../config.yaml"
@@ -12,7 +13,15 @@ dbOp = require "./database/operations"
 
 logErr = (err) ->
     unless err instanceof Error then return false
-    logger.error if err.stack? then "" + err.stack else err.message
+    logger.error(
+        if err.type? # An API error
+            err.type + ": " + err.message +
+                (if err.stack then "\n" + err.stack else "")
+        else if err.stack?
+            err.stack
+        else
+            err.message
+    )
     return true
 
 main = (config) ->
@@ -56,7 +65,7 @@ main = (config) ->
 
     # Process each new comment as it comes in.
     mainLoop = ->
-        r.commentStreamAnalytics().each (el) ->
+        r.commentStream().each (el) -> # RedditAnalytics was down as-of-writing
             if logErr el then return
             nodetime?.metric "Reddit API", "Comments per Minute", 1, "", "inc"
             commentCargo.push el, logErr
@@ -73,10 +82,23 @@ program
 config = _.defaults _.clone(config),
                     _.pick(program, "username", "owner", "botname")
 
-unless config.password?
-    program.password "password: ", (password) ->
-        config.password = password
-        main config
-else
-    main config
-
+inquirer.prompt [
+    {
+        name: "username",
+        type: "input",
+        message: "Reddit account username"
+        when: -> not config.username?
+    }
+    {
+        name: "password",
+        type: "password",
+        message: "Reddit account password"
+        validate: (pw) ->
+            if pw is "password"
+                "You really need to evaluate your life choices."
+            else
+                pw isnt ""
+        when: -> not config.password?
+    }
+], (answers) ->
+    main _.extend(config, answers)

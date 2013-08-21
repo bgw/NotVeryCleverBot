@@ -16,10 +16,10 @@ _extendError = (type) ->
 
 getError = (args) ->
     if _.isString args
-        return _extendError args
+        return new (_extendError args)()
     else
         [type, args...] = args
-        return new _extendError(type)(args...)
+        return new (_extendError type)(args...)
 
 _typeList = [
     "USER_REQUIRED"

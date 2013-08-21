@@ -30,7 +30,7 @@
     },
     "cyclomatic_complexity": {
         "level": "warn",
-        "value": 5
+        "value": 6
     },
     "no_backticks": {
         "level": "error"
@@ -43,7 +43,7 @@
         "level": "ignore"
     },
     "empty_constructor_needs_parens": {
-        "level": "warn"
+        "level": "error"
     },
     "non_empty_constructor_needs_parens": {
         "level": "ignore"

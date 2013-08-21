@@ -15,7 +15,7 @@ baseVersion = require("../package.json")?.version
 listing = require "./reddit/listing"
 stream = require "./reddit/stream"
 analytics = require "./reddit/analytics"
-redditError = require "./reddit/error"
+apiError = require "./reddit/error"
 
 # Static Utility Functions
 # ------------------------
@@ -48,9 +48,9 @@ statics.apiErrors = (oldCallback) ->
         if not response?
             error ?= new Error "Could not connect to server"
         else if response.statusCode != 200
-            error ?= new httperrors[response.statusCode]()
+            error ?= new (httperrors[response.statusCode])()
         else if body.json?.errors?.length
-            error ?= redditError body.json.errors[0]
+            error ?= apiError body.json.errors...
         oldCallback error, response, body
 
 # In many places, the Reddit API will wrap the returned JSON value. This forms a
