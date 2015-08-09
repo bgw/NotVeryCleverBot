@@ -2,6 +2,8 @@ config.yaml
 node_modules
 doc
 bin
+dist
 *.log
 *.sqlite
 *.sqlite-journal
+*.db

@@ -1,3 +1,5 @@
+require "./polyfill"
+
 _ = require "lodash"
 async = require "async"
 program = require "commander"

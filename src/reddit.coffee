@@ -7,7 +7,7 @@
 _ = require "lodash"
 resolve = require("url").resolve
 request = require "request"
-httperrors = require "httperrors"
+httpErrors = require "http-errors"
 limiter = require "limiter"
 
 logger = require "./logger"
@@ -48,7 +48,7 @@ statics.apiErrors = (oldCallback) ->
         if not response?
             error ?= new Error "Could not connect to server"
         else if response.statusCode != 200
-            error ?= new (httperrors[response.statusCode])()
+            error ?= httpErrors(response.statusCode)
         else if body.json?.errors?.length
             error ?= apiError body.json.errors...
         oldCallback error, response, body

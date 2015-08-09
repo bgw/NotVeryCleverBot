@@ -1,0 +1,12 @@
+---
+parser: babel-eslint
+env:
+  node: true
+rules:
+  comma-dangle: [1, always-multiline]
+  no-underscore-dangle: 0
+  quotes: [1, single, avoid-escape]
+  strict: [1, never]
+  no-process-exit: 0
+  no-loop-func: 0
+  max-len: [1, 80, 2]

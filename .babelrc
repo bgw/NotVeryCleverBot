@@ -1,0 +1,6 @@
+{
+  "optional": [
+    "bluebirdCoroutines"
+  ],
+  "ignore": ["dist/**/*", "node_modules/**/*"]
+}

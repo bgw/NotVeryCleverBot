@@ -1,6 +1,11 @@
 NotVeryCleverBot
 ================
 
+**This branch is nowhere near usable yet.** To see the original prototype this 
+is a rewrite of, [check out the master branch][master].
+
+[master]: https://github.com/bgw/NotVeryCleverBot/tree/master
+
 [![Dependency Status](https://gemnasium.com/PiPeep/NotVeryCleverBot.png)](https://gemnasium.com/PiPeep/NotVeryCleverBot)
 
 This is just a test of an idea. This records the top replies to the top comments
