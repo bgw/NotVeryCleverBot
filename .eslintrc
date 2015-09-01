@@ -4,9 +4,11 @@ env:
   node: true
 rules:
   comma-dangle: [1, always-multiline]
+  max-len: [1, 80, 2, {ignorePattern: '^import\\s'}]
+  no-loop-func: 0
+  no-process-exit: 0
   no-underscore-dangle: 0
+  no-use-before-define: 0
   quotes: [1, single, avoid-escape]
   strict: [1, never]
-  no-process-exit: 0
-  no-loop-func: 0
-  max-len: [1, 80, 2]
+  no-unused-vars: [1, argsIgnorePattern: '^_']

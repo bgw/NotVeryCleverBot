@@ -1,0 +1,4 @@
+---
+rules:
+  # sql objects use underscores
+  camelcase: 0

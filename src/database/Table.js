@@ -17,14 +17,14 @@ const __validateObject = Symbol('validateObject');
 const __validators = Symbol('validators');
 
 /**
- * A poor-man's Model implementation. We can't use bookshelf for perf reasons,
+ * A poor-man's Table implementation. We can't use bookshelf for perf reasons,
  * as we need better control of batching and upsert (INSERT OR REPLACE) support
  * (which knex doesn't even technically support).
  *
  * We use knex to generate the table, and generally use raw queries for
  * everything else.
  */
-export default class Model {
+export default class Table {
   constructor(knex, tableName, ...schema) {
     if (typeof knex === 'string') {
       if (arguments.length > 1) {
@@ -36,31 +36,47 @@ export default class Model {
     this.knex = knex || require('knex');
     this.tableName = tableName;
     this.schema = schema;
-    this[__validators] = {};
+    this[__validators] = null;
   }
 
   /**
    * Call this after the constructor to write the schema to the database.
    *
    * @returns {Promise} Unwraps to this, so you can chain, for example
-   * `let m = await new Model(foo, bar).init()`
+   * `let m = await new Table(foo, bar).init()`
    */
   async init() {
+    // write the columns to the knex schema
     await this.knex.schema.createTable(this.tableName, (table) => {
       for (const column of this.schema) {
-        assert.notEqual(column[__name], undefined,
-                        'the column should have a name');
         column[__define](table);
-        assert.equal(this[__validators][column[__name]], undefined,
-                     "a validator for the column shouldn't already exist");
-
-        if (column[__validator]) {
-          this[__validators][column[__name]] = column[__validator];
-        } else {
-          this[__validators][column[__name]] = () => true;
-        }
       }
     });
+
+    // copy the validators to a lookup table
+    const validators = {}; // lookup table
+    for (const column of this.schema) {
+      const name = column[__name];
+      assert.notEqual(name, undefined, 'the column should have a name');
+      assert.equal(
+        validators[name], undefined,
+        "a validator for the column shouldn't already exist"
+      );
+      if (column[__validator]) {
+        validators[name] = column[__validator];
+      } else {
+        validators[name] = () => true;
+      }
+    }
+
+    // add validator aliases for camelCase variants
+    for (const name of Object.keys(validators)) {
+      const camelName = _.camelCase(name);
+      // avoid overwriting an existing entry if there is one
+      validators[camelName] = validators[camelName] || validators[name];
+    }
+
+    this[__validators] = validators;
     return this;
   }
 
@@ -74,7 +90,7 @@ export default class Model {
    * or objects of parameters.
    *
    * 1. With `this.sql`:
-   *    
+   *
    *    ```js
    *    foos = await Foo.exec(Foo.sql`select * from Foo where bar=${{bar}}`);
    *    // or
@@ -82,7 +98,7 @@ export default class Model {
    *    ```
    *
    * 2. With only a raw sql string:
-   *    
+   *
    *    ```js
    *    foos = await Foo.exec('select * from Foo');
    *    ```
@@ -112,14 +128,14 @@ export default class Model {
    *    Entries don't need to be in-order, and extra entries are ignored. A
    *    spread of columns doesn't need to be specified, because column names can
    *    be derived from the object keys.
-   * 
+   *
    * @returns {Promise.<array.<object>>}
    */
   async exec(queryTemplate, ...args) {
     // simple operation: `exec(this.sql`select * from Foo where bar=${{bar}}`)`
     if (_.isPlainObject(queryTemplate)) {
       assert.equal(args.length, 0);
-      // we're using a template-string generated with Model.sql
+      // we're using a template-string generated with Table.sql
       return await this.knex.raw(queryTemplate.expression,
                                  queryTemplate.values);
     }
@@ -128,7 +144,7 @@ export default class Model {
     if (args.length === 0) {
       return await this.knex.raw(queryTemplate);
     }
-    
+
     // expand `...args` into `exec(queryTemplate, ...columns, ...args)`
     const columns = [];
     if (typeof args[0] === 'string') {
@@ -147,24 +163,24 @@ export default class Model {
         args.forEach(this[__validateArray].bind(this, columns));
       }
       return await this.knex.raw(
-        Model[__transformQueryTemplate](null, queryTemplate, args.length),
+        Table[__transformQueryTemplate](null, queryTemplate, args.length),
         [].concat(...args)
       );
     } else {
       if (columns.length) {
         throw new Error(
           "Don't specify column names with objects, instead use " +
-          ":namedParameters in your sql template"
+          ':namedParameters in your sql template'
         );
       }
       args.forEach(this[__validateObject], this);
       // use __transformSqlKeyBindings and string concatenation to allow bulk
       // operations on objects
       return await this.knex.raw(
-        Model[__transformQueryTemplate](
-          Model[__transformSqlKeyBindings], queryTemplate, args.length
+        Table[__transformQueryTemplate](
+          Table[__transformSqlKeyBindings], queryTemplate, args.length
         ),
-        Object.assign({}, ...args.map(Model[__transformSqlKeyBindingsObject]))
+        Object.assign({}, ...args.map(Table[__transformSqlKeyBindingsObject]))
       );
     }
   }
@@ -230,7 +246,7 @@ export default class Model {
   /**
    * Allows you to declaratively and lazily define columns using knex methods.
    *
-   * `Model.column().string('name').primary()` gets turned into
+   * `Table.column().string('name').primary()` gets turned into
    * `table.column().string('name').primary()` inside init().
    *
    * The structure then allows us to extend the syntax and introspect various
@@ -246,9 +262,13 @@ export default class Model {
          */
         [__define](table) { return table; },
         validator(v) {
+          if (v instanceof RegExp) {
+            const re = v; // can't use v, because the closure isn't frozen
+            v = (value) => re.test(value);
+          }
           this[__validator] = v;
           return proxy;
-        }
+        },
       },
       {
         get(target, key) {
@@ -265,7 +285,7 @@ export default class Model {
           // return it, and it'll set the prop on the column lazily.
           return (...args) => {
             // try to guess the name and type based upon the first function call
-            // eg. Model.column.string('foobar') tells us the column is a
+            // eg. Table.column.string('foobar') tells us the column is a
             // string, and the column name is foobar.
             if (target[__name] === undefined) {
               target[__name] = args[0];
@@ -278,7 +298,7 @@ export default class Model {
             // allow chaining
             return proxy;
           };
-        }
+        },
       }
     );
     return proxy;
@@ -310,7 +330,8 @@ export default class Model {
   }
 
   [__validate](column, value) {
-    const validator = this[__validators][column];
+    const validator =
+      this[__validators][column] || this[__validators][_.camelCase(column)];
     if (validator === undefined) {
       throw new Error(`Column '${column}' doesn't exist`);
     }
@@ -357,5 +378,31 @@ export default class Model {
    */
   execSql(strings, ...values) {
     return this.exec(this.sql(strings, ...values));
+  }
+
+  /**
+   * By convention, SQL uses under_scored identifiers, and camelCased
+   * identifiers in SQL are especially difficult because they'd need to be
+   * quoted every time.
+   *
+   * Normally an ORM would hide this from you by camel-casing the result
+   * automatically. Since this is a low-magic approach, we require you call this
+   * on the SQL result to convert object keys to camelCase.
+   */
+  static camelize(sqlResult, deleteHidden=true) {
+    if (Array.isArray(sqlResult)) {
+      return sqlResult.map(Table.camelize);
+    }
+    if (_.isPlainObject(sqlResult)) {
+      const result = {};
+      for (const k of Object.keys(sqlResult)) {
+        if (deleteHidden && k.startsWith('_')) {
+          continue;
+        }
+        result[_.camelCase(k)] = sqlResult[k];
+      }
+      return result;
+    }
+    return sqlResult;
   }
 }

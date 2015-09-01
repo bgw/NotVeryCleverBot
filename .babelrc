@@ -1,6 +1,8 @@
 {
   "optional": [
-    "bluebirdCoroutines"
+    "bluebirdCoroutines",
+    "runtime"
   ],
-  "ignore": ["dist/**/*", "node_modules/**/*"]
+  "ignore": ["dist/**/*", "node_modules/**/*"],
+  "retainLines": true
 }

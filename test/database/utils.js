@@ -10,7 +10,7 @@ beforeEach(() => {
     dialect: 'sqlite3',
     connection: {
       filename: ':memory:',
-    }
+    },
   });
 });
 

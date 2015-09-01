@@ -2,7 +2,7 @@ _ = require "lodash"
 _s = require "underscore.string"
 winston = require "winston"
 require "js-yaml"
-config = require("../config.yaml").logging
+config = require("./config")
 
 winston.exitOnError = false
 
@@ -14,7 +14,7 @@ winston.remove winston.transports.Console
 
 defaults = level: "info"
 
-for transport in config
+for transport in config.logging
     if _.isString transport
         type = transport
         opts = {}

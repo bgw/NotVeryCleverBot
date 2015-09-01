@@ -1,17 +1,17 @@
 import {expect} from 'chai';
 
 import {knex} from './utils';
-import Model from '../../dist/database/Model';
+import Table from '../../dist/database/Table';
 
 let Foo;
 
 beforeEach(async function() {
-  Foo = new Model(
+  Foo = new Table(
     knex,
     'Foo',
-    Model.column()
+    Table.column()
       .string('foo'),
-    Model.column()
+    Table.column()
       .float('bar')
       .unique()
   );
@@ -19,7 +19,7 @@ beforeEach(async function() {
 
 describe('column definition', () => {
   it('is fully lazy', () => {
-    Model.column()
+    Table.column()
       .string('foobar')
       .charset('non-existant')
       .methodDoesNotExist();

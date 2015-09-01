@@ -48,7 +48,7 @@ function mocha() {
       // we can't swallow exceptions mocha doesn't catch and report all types of
       // errors properly
       throw err;
-    })
+    });
 }
 
 gulp.task('build', gulp.parallel(babel, coffee));

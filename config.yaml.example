@@ -1,23 +1,26 @@
 botname: NotVeryCleverBot
 owner: pipeep
-username: nvcb-testing
-# If no password is provided, you are asked on launch
+username: NotVeryCleverBot
 password: wouldntyouliketoknow
-nodetime: # totally optional: http://nodetime.com/
-    accountKey: "0123456789abcdef0123456789abcdef01234567"
-    appName: "NotVeryCleverBot"
 database: # http://sequelizejs.com/documentation#usage-options
-    # Basic options
-    name: "nvcb"
+  # Basic options
+  name: nvcb
+  # Extra options
+  saveRawComments: true
+  # Knex options
+  client: sqlite
+  connection:
+    filename: database.sqlite
     username: null # Not needed for sqlite
     password: null
-    # Extra options
-    saveRawComments: true
-    dialect: "sqlite"
-    storage: "database.sqlite"
 logging:
-    - type: console
-      level: "verbose"
-    - type: file
-      filename: "nvcb.log"
-      level: "debug"
+  - type: console
+    level: verbose
+  - type: file
+    filename: nvcb.log
+    level: debug
+blacklist:
+  # TODO: https://www.reddit.com/r/TheoryOfReddit/comments/25yx8g/
+  # TODO: read quarentine label on comments
+  - suicidewatch
+  - depression
